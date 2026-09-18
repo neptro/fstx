@@ -13,8 +13,13 @@ use proptest::prelude::*;
 #[derive(Clone, Debug)]
 enum Node {
     /// `tag` = base inode if this is an original entry, `None` if created by the tx.
-    File { data: Vec<u8>, tag: Option<u64> },
-    Dir { tag: Option<u64> },
+    File {
+        data: Vec<u8>,
+        tag: Option<u64>,
+    },
+    Dir {
+        tag: Option<u64>,
+    },
 }
 
 type Model = BTreeMap<String, Node>;
@@ -51,7 +56,13 @@ fn apply(m: &mut Model, op: &Op) -> Result<Option<Vec<u8>>, ()> {
             if !is_dir(m, parent(p)) || matches!(m.get(p), Some(Node::Dir { .. })) {
                 return Err(());
             }
-            m.insert(p.clone(), Node::File { data: vec![*b; 3], tag: None });
+            m.insert(
+                p.clone(),
+                Node::File {
+                    data: vec![*b; 3],
+                    tag: None,
+                },
+            );
         }
         Op::Mkdirs(p) => {
             let parts: Vec<&str> = p.split('/').collect();
@@ -76,7 +87,11 @@ fn apply(m: &mut Model, op: &Op) -> Result<Option<Vec<u8>>, ()> {
             if under(t, f) || !is_dir(m, parent(t)) || m.contains_key(t) {
                 return Err(());
             }
-            let moved: Vec<String> = m.keys().filter(|k| *k == f || under(k, f)).cloned().collect();
+            let moved: Vec<String> = m
+                .keys()
+                .filter(|k| *k == f || under(k, f))
+                .cloned()
+                .collect();
             for k in moved {
                 let n = m.remove(&k).unwrap();
                 m.insert(format!("{t}{}", &k[f.len()..]), n);
@@ -127,7 +142,10 @@ fn base() -> (SimFs, Model) {
     for (path, e) in fs.tree() {
         let node = match e.kind {
             Kind::Dir => Node::Dir { tag: Some(e.ino) },
-            _ => Node::File { data: e.data, tag: Some(e.ino) },
+            _ => Node::File {
+                data: e.data,
+                tag: Some(e.ino),
+            },
         };
         m.insert(path, node);
     }

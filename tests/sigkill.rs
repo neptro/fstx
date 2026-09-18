@@ -19,17 +19,26 @@ const CHILD_ENV: &str = "FSTX_SIGKILL_CHILD_ROOT";
 /// The child's body. A no-op unless the parent started us with the env var.
 #[test]
 fn sigkill_child_entry() {
-    let Ok(root) = std::env::var(CHILD_ENV) else { return };
+    let Ok(root) = std::env::var(CHILD_ENV) else {
+        return;
+    };
     let root = Path::new(&root);
     fstx::recover(root).unwrap();
     for generation in generation_of(root) + 1.. {
         let mut tx = Transaction::begin(root).unwrap();
         for i in 0..FILES {
-            tx.write(format!("f{i}"), generation.to_string().repeat(512)).unwrap();
+            tx.write(format!("f{i}"), generation.to_string().repeat(512))
+                .unwrap();
         }
-        let (from, to) = if generation % 2 == 0 { ("odd", "even") } else { ("even", "odd") };
-        tx.rename(format!("dir-{from}"), format!("dir-{to}")).unwrap();
-        tx.write(format!("dir-{to}/gen"), generation.to_string()).unwrap();
+        let (from, to) = if generation % 2 == 0 {
+            ("odd", "even")
+        } else {
+            ("even", "odd")
+        };
+        tx.rename(format!("dir-{from}"), format!("dir-{to}"))
+            .unwrap();
+        tx.write(format!("dir-{to}/gen"), generation.to_string())
+            .unwrap();
         tx.commit().unwrap();
     }
 }
@@ -44,9 +53,15 @@ fn generation_of(root: &Path) -> u64 {
     assert!(gens.iter().all(|&x| x == g), "torn state: {gens:?}");
     let dir = if g % 2 == 0 { "dir-even" } else { "dir-odd" };
     let other = if g % 2 == 0 { "dir-odd" } else { "dir-even" };
-    assert!(!root.join(other).exists(), "both directories exist at generation {g}");
+    assert!(
+        !root.join(other).exists(),
+        "both directories exist at generation {g}"
+    );
     if g > 0 {
-        assert_eq!(fs::read_to_string(root.join(dir).join("gen")).unwrap(), g.to_string());
+        assert_eq!(
+            fs::read_to_string(root.join(dir).join("gen")).unwrap(),
+            g.to_string()
+        );
     }
     g
 }
@@ -68,7 +83,12 @@ fn random_sigkills_leave_old_or_new() {
     let mut advanced = 0;
     for _ in 0..200 {
         let mut child = Command::new(&exe)
-            .args(["--exact", "sigkill_child_entry", "--nocapture", "--test-threads=1"])
+            .args([
+                "--exact",
+                "sigkill_child_entry",
+                "--nocapture",
+                "--test-threads=1",
+            ])
             .env(CHILD_ENV, root)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())

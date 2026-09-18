@@ -13,9 +13,22 @@ use fstx::{Error, Transaction};
 fn lexically_invalid_paths_are_rejected() {
     let d = scratch();
     let mut tx = Transaction::begin(d.path()).unwrap();
-    for bad in ["", "/etc/passwd", "../escape", "a/../../b", ".fstx/lock", ".FSTX/x"] {
-        assert!(matches!(tx.write(bad, "x"), Err(Error::InvalidPath { .. })), "{bad:?}");
-        assert!(matches!(tx.rename("a", bad), Err(Error::InvalidPath { .. })), "{bad:?}");
+    for bad in [
+        "",
+        "/etc/passwd",
+        "../escape",
+        "a/../../b",
+        ".fstx/lock",
+        ".FSTX/x",
+    ] {
+        assert!(
+            matches!(tx.write(bad, "x"), Err(Error::InvalidPath { .. })),
+            "{bad:?}"
+        );
+        assert!(
+            matches!(tx.rename("a", bad), Err(Error::InvalidPath { .. })),
+            "{bad:?}"
+        );
     }
 }
 
@@ -39,12 +52,24 @@ fn symlink_targets_are_refused() {
     fs::write(outside.path().join("secret"), "s").unwrap();
     symlink(outside.path().join("secret"), d.path().join("sym")).unwrap();
     let mut tx = Transaction::begin(d.path()).unwrap();
-    assert!(matches!(tx.write("sym", "x"), Err(Error::UnsupportedFileType(_))));
-    assert!(matches!(tx.remove("sym"), Err(Error::UnsupportedFileType(_))));
-    assert!(matches!(tx.rename("sym", "t"), Err(Error::UnsupportedFileType(_))));
+    assert!(matches!(
+        tx.write("sym", "x"),
+        Err(Error::UnsupportedFileType(_))
+    ));
+    assert!(matches!(
+        tx.remove("sym"),
+        Err(Error::UnsupportedFileType(_))
+    ));
+    assert!(matches!(
+        tx.rename("sym", "t"),
+        Err(Error::UnsupportedFileType(_))
+    ));
     assert!(matches!(tx.read("sym"), Err(Error::UnsupportedFileType(_))));
     drop(tx);
-    assert_eq!(fs::read_to_string(outside.path().join("secret")).unwrap(), "s");
+    assert_eq!(
+        fs::read_to_string(outside.path().join("secret")).unwrap(),
+        "s"
+    );
 }
 
 #[test]
@@ -59,7 +84,10 @@ fn removing_a_tree_with_symlinks_never_touches_their_targets() {
     tx.remove_dir_all("t").unwrap();
     tx.commit().unwrap();
     assert!(!d.path().join("t").exists());
-    assert_eq!(fs::read_to_string(outside.path().join("keep")).unwrap(), "k");
+    assert_eq!(
+        fs::read_to_string(outside.path().join("keep")).unwrap(),
+        "k"
+    );
 }
 
 #[test]

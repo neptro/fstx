@@ -13,7 +13,12 @@ pub(crate) const LEN: usize = 16;
 
 fn check(head: &[u8]) -> [u8; 4] {
     let h = blake3::hash(head);
-    [h.as_bytes()[0], h.as_bytes()[1], h.as_bytes()[2], h.as_bytes()[3]]
+    [
+        h.as_bytes()[0],
+        h.as_bytes()[1],
+        h.as_bytes()[2],
+        h.as_bytes()[3],
+    ]
 }
 
 pub(crate) fn encode(r: Record) -> [u8; LEN] {
@@ -68,7 +73,14 @@ mod tests {
         assert_eq!(parse(&b), vec![Record::ApplyDone(0), Record::UndoDone(7)]);
         // A record appended after a torn tail is still found.
         b.extend_from_slice(&encode(Record::UndoDone(2)));
-        assert_eq!(parse(&b), vec![Record::ApplyDone(0), Record::UndoDone(7), Record::UndoDone(2)]);
+        assert_eq!(
+            parse(&b),
+            vec![
+                Record::ApplyDone(0),
+                Record::UndoDone(7),
+                Record::UndoDone(2)
+            ]
+        );
         b[20] ^= 0xff;
         assert_eq!(parse(&b), vec![Record::ApplyDone(0), Record::UndoDone(2)]);
     }

@@ -25,8 +25,14 @@ fn commit_makes_all_changes_visible_at_once() {
     assert!(root.join("tmp.log").exists());
     tx.commit().unwrap();
 
-    assert_eq!(fs::read_to_string(root.join("config.toml")).unwrap(), "v = 2");
-    assert_eq!(fs::read_to_string(root.join("src/gen/new.rs")).unwrap(), "old");
+    assert_eq!(
+        fs::read_to_string(root.join("config.toml")).unwrap(),
+        "v = 2"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("src/gen/new.rs")).unwrap(),
+        "old"
+    );
     assert!(!root.join("old.rs").exists());
     assert!(!root.join("tmp.log").exists());
     assert!(leftovers(root).is_empty(), "{:?}", leftovers(root));
@@ -89,7 +95,10 @@ fn swapping_identical_files_swaps_identities() {
     let root = d.path();
     fs::write(root.join("a"), "same").unwrap();
     fs::write(root.join("b"), "same").unwrap();
-    let (ia, ib) = (fs::metadata(root.join("a")).unwrap().ino(), fs::metadata(root.join("b")).unwrap().ino());
+    let (ia, ib) = (
+        fs::metadata(root.join("a")).unwrap().ino(),
+        fs::metadata(root.join("b")).unwrap().ino(),
+    );
     let mut tx = Transaction::begin(root).unwrap();
     tx.rename("a", "tmp").unwrap();
     tx.rename("b", "a").unwrap();
@@ -134,7 +143,14 @@ fn replaced_file_keeps_its_permissions() {
     let mut tx = Transaction::begin(root).unwrap();
     tx.write("s.sh", "new").unwrap();
     tx.commit().unwrap();
-    assert_eq!(fs::metadata(root.join("s.sh")).unwrap().permissions().mode() & 0o7777, 0o750);
+    assert_eq!(
+        fs::metadata(root.join("s.sh"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o750
+    );
 }
 
 #[test]
@@ -146,11 +162,23 @@ fn remove_dir_all_and_errors() {
     fs::write(root.join("file"), "x").unwrap();
     let mut tx = Transaction::begin(root).unwrap();
     assert!(matches!(tx.remove("d"), Err(Error::DirectoryNotEmpty(_))));
-    assert!(matches!(tx.rename("d", "file"), Err(Error::AlreadyExists(_))));
-    assert!(matches!(tx.rename("d", "d/e/x"), Err(Error::InvalidMove { .. })));
-    assert!(matches!(tx.write("file/x", "y"), Err(Error::NotADirectory(_))));
+    assert!(matches!(
+        tx.rename("d", "file"),
+        Err(Error::AlreadyExists(_))
+    ));
+    assert!(matches!(
+        tx.rename("d", "d/e/x"),
+        Err(Error::InvalidMove { .. })
+    ));
+    assert!(matches!(
+        tx.write("file/x", "y"),
+        Err(Error::NotADirectory(_))
+    ));
     assert!(matches!(tx.write("d", "y"), Err(Error::IsADirectory(_))));
-    assert!(matches!(tx.write(".fstx/x", "y"), Err(Error::InvalidPath { .. })));
+    assert!(matches!(
+        tx.write(".fstx/x", "y"),
+        Err(Error::InvalidPath { .. })
+    ));
     tx.remove_dir_all("d").unwrap();
     tx.commit().unwrap();
     assert!(!root.join("d").exists());

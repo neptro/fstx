@@ -27,14 +27,16 @@ fn cache() -> &'static Mutex<HashMap<FileId, Caps>> {
 pub(crate) fn probe(vfs: &dyn Vfs, allow_untested_fs: bool) -> Result<Caps> {
     if vfs.untrusted_fs_type()?.is_some() && !allow_untested_fs {
         return Err(Error::UnsupportedFilesystem {
-            missing: vec!["a local filesystem (network/FUSE filesystem detected; see Options::allow_untested_fs)"],
+            missing: vec![
+                "a local filesystem (network/FUSE filesystem detected; see Options::allow_untested_fs)",
+            ],
         });
     }
     let key = vfs.probe_cache_key();
-    if let Some(k) = key {
-        if let Some(c) = cache().lock().unwrap_or_else(|e| e.into_inner()).get(&k) {
-            return Ok(*c);
-        }
+    if let Some(k) = key
+        && let Some(c) = cache().lock().unwrap_or_else(|e| e.into_inner()).get(&k)
+    {
+        return Ok(*c);
     }
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -46,7 +48,10 @@ pub(crate) fn probe(vfs: &dyn Vfs, allow_untested_fs: bool) -> Result<Caps> {
     let _ = delete_tree(vfs, &dir);
     let caps = result?;
     if let Some(k) = key {
-        cache().lock().unwrap_or_else(|e| e.into_inner()).insert(k, caps);
+        cache()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(k, caps);
     }
     Ok(caps)
 }
@@ -54,7 +59,10 @@ pub(crate) fn probe(vfs: &dyn Vfs, allow_untested_fs: bool) -> Result<Caps> {
 /// EINVAL/EOPNOTSUPP/ENOSYS mean "not supported"; any other error (EIO, ENOSPC, ...) is a
 /// real failure and must not be mistaken for a missing capability.
 fn unsupported(e: &io::Error) -> bool {
-    matches!(e.kind(), io::ErrorKind::Unsupported | io::ErrorKind::InvalidInput)
+    matches!(
+        e.kind(),
+        io::ErrorKind::Unsupported | io::ErrorKind::InvalidInput
+    )
 }
 
 fn run_probe(vfs: &dyn Vfs, dir: &RelPath) -> Result<Caps> {

@@ -27,13 +27,14 @@ fn crash_after_event(event: &str, extra: u64) -> (SimFs, SimFs) {
             ops(&mut tx)?;
             tx.commit()
         });
-        if fs.events().iter().any(|e| *e == event) {
+        if fs.events().contains(&event) {
             let fs = base();
             fs.crash_after(budget + extra);
-            let _ = Transaction::begin_on(Box::new(fs.clone()), &Options::new()).and_then(|mut tx| {
-                ops(&mut tx)?;
-                tx.commit()
-            });
+            let _ =
+                Transaction::begin_on(Box::new(fs.clone()), &Options::new()).and_then(|mut tx| {
+                    ops(&mut tx)?;
+                    tx.commit()
+                });
             return (fs.process_kill(), before_after());
         }
     }
@@ -49,13 +50,25 @@ fn before_after() -> SimFs {
 }
 
 fn tx_name(fs: &SimFs) -> String {
-    fs.private_tree().keys().find(|k| k.starts_with("tx-") && !k.contains('/')).expect("tx dir").clone()
+    fs.private_tree()
+        .keys()
+        .find(|k| k.starts_with("tx-") && !k.contains('/'))
+        .expect("tx dir")
+        .clone()
 }
 
-fn assert_untouched(fs: &SimFs, f: impl FnOnce(&SimFs) -> fstx::Result<fstx::RecoveryReport>) -> Error {
+fn assert_untouched(
+    fs: &SimFs,
+    f: impl FnOnce(&SimFs) -> fstx::Result<fstx::RecoveryReport>,
+) -> Error {
     let tree = fs.tree();
     let name = tx_name(fs);
-    let txdir = |fs: &SimFs| fs.private_tree().into_iter().filter(|(k, _)| k.starts_with(&name)).collect::<Vec<_>>();
+    let txdir = |fs: &SimFs| {
+        fs.private_tree()
+            .into_iter()
+            .filter(|(k, _)| k.starts_with(&name))
+            .collect::<Vec<_>>()
+    };
     let before = txdir(fs);
     let err = f(fs).expect_err("must refuse");
     assert!(matches!(err, Error::RecoveryRequired { .. }), "{err}");
@@ -76,7 +89,10 @@ fn never_prepared_is_discarded() {
     ops(&mut tx).unwrap();
     std::mem::forget(tx); // process dies before commit
     let fs = fs.process_kill();
-    assert_eq!(inspect_on(&fs).unwrap().transactions[0].action, RecoveryAction::Discard);
+    assert_eq!(
+        inspect_on(&fs).unwrap().transactions[0].action,
+        RecoveryAction::Discard
+    );
     let r = recover(&fs).unwrap();
     assert_eq!(r.discarded.len(), 1);
     assert_eq!(fs.tree(), before);
@@ -91,7 +107,10 @@ fn torn_journal_tmp_only_is_discarded() {
     ops(&mut tx).unwrap();
     std::mem::forget(tx);
     let name = tx_name(&fs);
-    fs.put_file(&format!(".fstx/{name}/journal.tmp"), b"{\"format\":1,\"tx\"");
+    fs.put_file(
+        &format!(".fstx/{name}/journal.tmp"),
+        b"{\"format\":1,\"tx\"",
+    );
     assert_eq!(recover(&fs).unwrap().discarded, vec![name]);
     assert_eq!(fs.tree(), before);
 }
@@ -105,7 +124,10 @@ fn backup_without_journal_requires_intervention() {
     let name = tx_name(&fs);
     fs.put_file(&format!(".fstx/{name}/backup/0"), b"someone's data");
     assert_untouched(&fs, recover);
-    assert_eq!(inspect_on(&fs).unwrap().transactions[0].action, RecoveryAction::RecoveryRequired);
+    assert_eq!(
+        inspect_on(&fs).unwrap().transactions[0].action,
+        RecoveryAction::RecoveryRequired
+    );
 }
 
 #[test]
@@ -116,13 +138,18 @@ fn corrupt_journal_requires_intervention_and_touches_nothing() {
     let err = assert_untouched(&fs, recover);
     assert!(err.to_string().contains("checksum"), "{err}");
     // begin refuses too, and still touches nothing.
-    assert_untouched(&fs, |fs| Transaction::begin_on(Box::new(fs.clone()), &Options::new()).map(|_| Default::default()));
+    assert_untouched(&fs, |fs| {
+        Transaction::begin_on(Box::new(fs.clone()), &Options::new()).map(|_| Default::default())
+    });
 }
 
 #[test]
 fn prepared_uncommitted_rolls_back() {
     let (fs, _) = crash_after_event("prepared", 2);
-    assert_eq!(inspect_on(&fs).unwrap().transactions[0].action, RecoveryAction::RollBack);
+    assert_eq!(
+        inspect_on(&fs).unwrap().transactions[0].action,
+        RecoveryAction::RollBack
+    );
     let r = recover(&fs).unwrap();
     assert_eq!(r.rolled_back.len(), 1);
     assert_eq!(fs.tree(), base().tree());
@@ -132,7 +159,10 @@ fn prepared_uncommitted_rolls_back() {
 #[test]
 fn committed_is_only_cleaned_up() {
     let (fs, after) = crash_after_event("committed", 0);
-    assert_eq!(inspect_on(&fs).unwrap().transactions[0].action, RecoveryAction::CleanUpCommitted);
+    assert_eq!(
+        inspect_on(&fs).unwrap().transactions[0].action,
+        RecoveryAction::CleanUpCommitted
+    );
     let r = recover(&fs).unwrap();
     assert_eq!(r.completed.len(), 1);
     assert_eq!(fs.tree(), after.tree());
@@ -175,12 +205,26 @@ fn inspect_never_mutates() {
 #[test]
 fn probe_rejects_filesystems_without_required_semantics() {
     for (cfg, what) in [
-        (SimConfig { noreplace: false, ..SimConfig::default() }, "no-replace"),
-        (SimConfig { stable_ids: false, ..SimConfig::default() }, "stable"),
+        (
+            SimConfig {
+                noreplace: false,
+                ..SimConfig::default()
+            },
+            "no-replace",
+        ),
+        (
+            SimConfig {
+                stable_ids: false,
+                ..SimConfig::default()
+            },
+            "stable",
+        ),
     ] {
         let fs = SimFs::new(cfg);
         match Transaction::begin_on(Box::new(fs), &Options::new()) {
-            Err(Error::UnsupportedFilesystem { missing }) => assert!(missing.iter().any(|m| m.contains(what)), "{missing:?}"),
+            Err(Error::UnsupportedFilesystem { missing }) => {
+                assert!(missing.iter().any(|m| m.contains(what)), "{missing:?}")
+            }
             other => panic!("expected UnsupportedFilesystem, got {other:?}"),
         }
     }
@@ -188,12 +232,21 @@ fn probe_rejects_filesystems_without_required_semantics() {
 
 #[test]
 fn case_insensitive_filesystem_rejects_colliding_names() {
-    let fs = SimFs::new(SimConfig { case_insensitive: true, ..SimConfig::default() });
+    let fs = SimFs::new(SimConfig {
+        case_insensitive: true,
+        ..SimConfig::default()
+    });
     fs.put_file("Readme", b"r");
     let mut tx = Transaction::begin_on(Box::new(fs.clone()), &Options::new()).unwrap();
     assert!(tx.case_insensitive());
-    assert!(matches!(tx.write("README", b"x"), Err(Error::CaseCollision { .. })));
-    assert!(matches!(tx.create_dir_all("readme"), Err(Error::CaseCollision { .. })));
+    assert!(matches!(
+        tx.write("README", b"x"),
+        Err(Error::CaseCollision { .. })
+    ));
+    assert!(matches!(
+        tx.create_dir_all("readme"),
+        Err(Error::CaseCollision { .. })
+    ));
     tx.write("Readme", b"ok").unwrap();
     tx.write("other", b"o").unwrap();
     tx.commit().unwrap();

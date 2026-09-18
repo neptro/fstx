@@ -43,11 +43,20 @@ fn main() {
         budget += 1;
     };
     show("before", &base());
-    show(&format!("\ncrashed after {budget} syscalls (half applied, visible in the page cache)"), &fs);
+    show(
+        &format!("\ncrashed after {budget} syscalls (half applied, visible in the page cache)"),
+        &fs,
+    );
 
     let after_power_loss = fs.durable();
     let insp = inspect_on(&after_power_loss).unwrap();
-    println!("\ninspect: {:?}", insp.transactions.iter().map(|t| t.action).collect::<Vec<_>>());
+    println!(
+        "\ninspect: {:?}",
+        insp.transactions
+            .iter()
+            .map(|t| t.action)
+            .collect::<Vec<_>>()
+    );
 
     let report = recover_on(&after_power_loss, &Options::new()).unwrap();
     println!("recover: rolled back {:?}", report.rolled_back);

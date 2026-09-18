@@ -67,7 +67,11 @@ pub(crate) fn inspect_on(vfs: &dyn Vfs) -> Result<Inspection> {
         return Ok(out);
     }
     let _lock = vfs.lock(false)?;
-    let mut names: Vec<String> = vfs.read_dir(&private_dir())?.into_iter().filter_map(|n| n.into_string().ok()).collect();
+    let mut names: Vec<String> = vfs
+        .read_dir(&private_dir())?
+        .into_iter()
+        .filter_map(|n| n.into_string().ok())
+        .collect();
     names.sort();
     for name in names {
         if name.starts_with(GC_PREFIX) || name.starts_with(PROBE_PREFIX) {
@@ -95,20 +99,36 @@ pub(crate) fn inspect_on(vfs: &dyn Vfs) -> Result<Inspection> {
                         kind: t.kind,
                         id: t.id,
                         locations: t.locs.iter().map(|l| l.path.to_path_buf()).collect(),
-                        position: c.map(|p| match p {
-                            Pos::At(i) => TokenPosition { index: i, both_names: false },
-                            Pos::Both(i) => TokenPosition { index: i, both_names: true },
-                        })
-                        .inspect_err(|e| {
-                            reason.get_or_insert_with(|| e.clone());
-                        }),
+                        position: c
+                            .map(|p| match p {
+                                Pos::At(i) => TokenPosition {
+                                    index: i,
+                                    both_names: false,
+                                },
+                                Pos::Both(i) => TokenPosition {
+                                    index: i,
+                                    both_names: true,
+                                },
+                            })
+                            .inspect_err(|e| {
+                                reason.get_or_insert_with(|| e.clone());
+                            }),
                     })
                     .collect();
-                let action = if reason.is_some() { RecoveryAction::RecoveryRequired } else { RecoveryAction::RollBack };
+                let action = if reason.is_some() {
+                    RecoveryAction::RecoveryRequired
+                } else {
+                    RecoveryAction::RollBack
+                };
                 (action, reason, tokens)
             }
         };
-        out.transactions.push(TxInspection { name, action, reason, tokens });
+        out.transactions.push(TxInspection {
+            name,
+            action,
+            reason,
+            tokens,
+        });
     }
     Ok(out)
 }

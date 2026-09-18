@@ -44,7 +44,12 @@ pub struct SimConfig {
 
 impl Default for SimConfig {
     fn default() -> Self {
-        SimConfig { profile: Profile::Strict, noreplace: true, stable_ids: true, case_insensitive: false }
+        SimConfig {
+            profile: Profile::Strict,
+            noreplace: true,
+            stable_ids: true,
+            case_insensitive: false,
+        }
     }
 }
 
@@ -59,8 +64,14 @@ pub enum Fate {
 
 #[derive(Clone, Debug)]
 enum Node {
-    File { data: Vec<u8>, mode: u32 },
-    Dir { entries: BTreeMap<OsString, u64>, mode: u32 },
+    File {
+        data: Vec<u8>,
+        mode: u32,
+    },
+    Dir {
+        entries: BTreeMap<OsString, u64>,
+        mode: u32,
+    },
     Symlink,
 }
 
@@ -72,9 +83,24 @@ struct Image {
 
 #[derive(Clone, Debug)]
 enum Op {
-    Link { dir: u64, name: OsString, ino: u64 },
-    Unlink { dir: u64, name: OsString, ino: u64 },
-    Rename { fdir: u64, fname: OsString, tdir: u64, tname: OsString, ino: u64, is_dir: bool },
+    Link {
+        dir: u64,
+        name: OsString,
+        ino: u64,
+    },
+    Unlink {
+        dir: u64,
+        name: OsString,
+        ino: u64,
+    },
+    Rename {
+        fdir: u64,
+        fname: OsString,
+        tdir: u64,
+        tname: OsString,
+        ino: u64,
+        is_dir: bool,
+    },
 }
 
 impl Op {
@@ -139,7 +165,13 @@ fn fold_name(s: &OsStr) -> Vec<u8> {
 impl Image {
     fn empty() -> Image {
         let mut nodes = BTreeMap::new();
-        nodes.insert(1, Node::Dir { entries: BTreeMap::new(), mode: 0o755 });
+        nodes.insert(
+            1,
+            Node::Dir {
+                entries: BTreeMap::new(),
+                mode: 0o755,
+            },
+        );
         Image { nodes, root: 1 }
     }
 
@@ -164,7 +196,10 @@ impl Image {
         }
         if ci {
             let f = fold_name(name);
-            return e.iter().find(|(k, _)| fold_name(k) == f).map(|(k, v)| (k.clone(), *v));
+            return e
+                .iter()
+                .find(|(k, _)| fold_name(k) == f)
+                .map(|(k, v)| (k.clone(), *v));
         }
         None
     }
@@ -173,18 +208,30 @@ impl Image {
     fn resolve_dir(&self, p: &RelPath, ci: bool) -> io::Result<u64> {
         let mut cur = self.root;
         for c in p.components() {
-            let (_, ino) = self.lookup(cur, c, ci).ok_or_else(|| err(io::ErrorKind::NotFound, "no such directory"))?;
+            let (_, ino) = self
+                .lookup(cur, c, ci)
+                .ok_or_else(|| err(io::ErrorKind::NotFound, "no such directory"))?;
             match self.nodes.get(&ino) {
                 Some(Node::Dir { .. }) => cur = ino,
-                Some(Node::Symlink) => return Err(err(io::ErrorKind::InvalidInput, "symlink in path (ELOOP)")),
+                Some(Node::Symlink) => {
+                    return Err(err(io::ErrorKind::InvalidInput, "symlink in path (ELOOP)"));
+                }
                 _ => return Err(err(io::ErrorKind::NotADirectory, "not a directory")),
             }
         }
         Ok(cur)
     }
 
-    fn walk(&self, dir: u64, prefix: &str, skip_private: bool, out: &mut BTreeMap<String, TreeEntry>) {
-        let Some(entries) = self.entries(dir) else { return };
+    fn walk(
+        &self,
+        dir: u64,
+        prefix: &str,
+        skip_private: bool,
+        out: &mut BTreeMap<String, TreeEntry>,
+    ) {
+        let Some(entries) = self.entries(dir) else {
+            return;
+        };
         for (name, &ino) in entries {
             if skip_private && prefix.is_empty() && name == PRIVATE_DIR {
                 continue;
@@ -212,18 +259,22 @@ impl State {
         if self.crashed {
             return Err(crash_err());
         }
-        if let Some(b) = self.budget {
-            if self.calls >= b {
-                self.crashed = true;
-                return Err(crash_err());
-            }
+        if let Some(b) = self.budget
+            && self.calls >= b
+        {
+            self.crashed = true;
+            return Err(crash_err());
         }
         self.calls += 1;
         Ok(())
     }
 
     fn alive(&self) -> io::Result<()> {
-        if self.crashed { Err(crash_err()) } else { Ok(()) }
+        if self.crashed {
+            Err(crash_err())
+        } else {
+            Ok(())
+        }
     }
 
     fn ci(&self) -> bool {
@@ -232,7 +283,10 @@ impl State {
 
     fn file_id(&self, ino: u64) -> FileId {
         let salt = self.id_salt.get(&ino).copied().unwrap_or(0);
-        FileId { dev: 1, ino: ino + salt * 1_000_000_000 }
+        FileId {
+            dev: 1,
+            ino: ino + salt * 1_000_000_000,
+        }
     }
 
     fn meta(&self, ino: u64) -> Meta {
@@ -246,16 +300,31 @@ impl State {
             .nodes
             .values()
             .filter_map(|n| match n {
-                Node::Dir { entries, .. } => Some(entries.values().filter(|&&i| i == ino).count() as u64),
+                Node::Dir { entries, .. } => {
+                    Some(entries.values().filter(|&&i| i == ino).count() as u64)
+                }
                 _ => None,
             })
             .sum();
-        Meta { kind, id: self.file_id(ino), len, mode, nlink }
+        Meta {
+            kind,
+            id: self.file_id(ino),
+            len,
+            mode,
+            nlink,
+        }
     }
 
     fn parent_and_leaf(&self, p: &RelPath) -> io::Result<(u64, OsString)> {
-        let leaf = p.file_name().ok_or_else(|| err(io::ErrorKind::InvalidInput, "root"))?.to_os_string();
-        Ok((self.vol.resolve_dir(&p.parent().unwrap_or_default(), self.ci())?, leaf))
+        let leaf = p
+            .file_name()
+            .ok_or_else(|| err(io::ErrorKind::InvalidInput, "root"))?
+            .to_os_string();
+        Ok((
+            self.vol
+                .resolve_dir(&p.parent().unwrap_or_default(), self.ci())?,
+            leaf,
+        ))
     }
 
     fn check_parent(&self, dir: u64, expect: Option<FileId>) -> io::Result<()> {
@@ -271,7 +340,14 @@ impl State {
         }
         let (dir, leaf) = match self.parent_and_leaf(p) {
             Ok(x) => x,
-            Err(e) if matches!(e.kind(), io::ErrorKind::NotFound | io::ErrorKind::NotADirectory) => return Ok(None),
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                ) =>
+            {
+                return Ok(None);
+            }
             Err(e) => return Err(e),
         };
         Ok(self.vol.lookup(dir, &leaf, self.ci()).map(|(_, i)| i))
@@ -279,14 +355,34 @@ impl State {
 
     /// Records a namespace mutation and checks the name-reuse rule.
     fn record(&mut self, op: Op) {
-        if let Op::Link { dir, name, ino } | Op::Rename { tdir: dir, tname: name, ino, .. } = &op {
+        if let Op::Link { dir, name, ino }
+        | Op::Rename {
+            tdir: dir,
+            tname: name,
+            ino,
+            ..
+        } = &op
+        {
             for p in &self.pending {
                 let removed = match &p.op {
-                    Op::Unlink { dir: d, name: n, ino: i } => (d, n, i),
-                    Op::Rename { fdir: d, fname: n, ino: i, .. } => (d, n, i),
+                    Op::Unlink {
+                        dir: d,
+                        name: n,
+                        ino: i,
+                    } => (d, n, i),
+                    Op::Rename {
+                        fdir: d,
+                        fname: n,
+                        ino: i,
+                        ..
+                    } => (d, n, i),
                     Op::Link { .. } => continue,
                 };
-                if !p.unsynced.is_empty() && removed.0 == dir && removed.1 == name && removed.2 != ino {
+                if !p.unsynced.is_empty()
+                    && removed.0 == dir
+                    && removed.1 == name
+                    && removed.2 != ino
+                {
                     self.violations.push(format!(
                         "name {name:?} in dir {dir} reused for inode {ino} before the removal of inode {} was durable",
                         removed.2
@@ -319,8 +415,14 @@ fn ensure_node(img: &mut Image, vol: &Image, ino: u64) {
         return;
     }
     let node = match vol.nodes.get(&ino) {
-        Some(Node::File { mode, .. }) => Node::File { data: Vec::new(), mode: *mode },
-        Some(Node::Dir { mode, .. }) => Node::Dir { entries: BTreeMap::new(), mode: *mode },
+        Some(Node::File { mode, .. }) => Node::File {
+            data: Vec::new(),
+            mode: *mode,
+        },
+        Some(Node::Dir { mode, .. }) => Node::Dir {
+            entries: BTreeMap::new(),
+            mode: *mode,
+        },
         _ => Node::Symlink,
     };
     img.nodes.insert(ino, node);
@@ -334,29 +436,35 @@ fn apply_op(img: &mut Image, vol: &Image, op: &Op, fate: Fate, violations: &mut 
         ensure_node(img, vol, dir);
         ensure_node(img, vol, ino);
         let entries = img.entries_mut(dir).expect("dir node");
-        if let Some(&old) = entries.get(name) {
-            if old != ino {
-                violations.push(format!("durable name {name:?} in dir {dir} overwritten"));
-            }
+        if let Some(&old) = entries.get(name)
+            && old != ino
+        {
+            violations.push(format!("durable name {name:?} in dir {dir} overwritten"));
         }
         entries.insert(name.clone(), ino);
     };
     match op {
         Op::Link { dir, name, ino } => insert(img, *dir, name, *ino),
         Op::Unlink { dir, name, ino } => {
-            if let Some(e) = img.entries_mut(*dir) {
-                if e.get(name) == Some(ino) {
-                    e.remove(name);
-                }
+            if let Some(e) = img.entries_mut(*dir)
+                && e.get(name) == Some(ino)
+            {
+                e.remove(name);
             }
         }
-        Op::Rename { fdir, fname, tdir, tname, ino, .. } => {
-            if fate != Fate::BothNames {
-                if let Some(e) = img.entries_mut(*fdir) {
-                    if e.get(fname) == Some(ino) {
-                        e.remove(fname);
-                    }
-                }
+        Op::Rename {
+            fdir,
+            fname,
+            tdir,
+            tname,
+            ino,
+            ..
+        } => {
+            if fate != Fate::BothNames
+                && let Some(e) = img.entries_mut(*fdir)
+                && e.get(fname) == Some(ino)
+            {
+                e.remove(fname);
             }
             insert(img, *tdir, tname, *ino);
         }
@@ -364,7 +472,11 @@ fn apply_op(img: &mut Image, vol: &Image, op: &Op, fate: Fate, violations: &mut 
 }
 
 fn data_variant(old: &[u8], new: &[u8], seed: u8) -> Vec<u8> {
-    let tail: &[u8] = if new.starts_with(old) { &new[old.len()..] } else { new };
+    let tail: &[u8] = if new.starts_with(old) {
+        &new[old.len()..]
+    } else {
+        new
+    };
     let base: &[u8] = if new.starts_with(old) { old } else { &[] };
     match seed % 4 {
         0 => old.to_vec(),
@@ -408,7 +520,9 @@ impl SimFs {
     }
 
     fn from_state(st: State) -> SimFs {
-        SimFs { st: Arc::new(Mutex::new(st)) }
+        SimFs {
+            st: Arc::new(Mutex::new(st)),
+        }
     }
 
     fn put(&self, path: &str, node: Node) {
@@ -428,19 +542,34 @@ impl SimFs {
 
     /// Adds a durable file (test setup).
     pub fn put_file(&self, path: &str, data: &[u8]) {
-        self.put(path, Node::File { data: data.to_vec(), mode: 0o644 });
+        self.put(
+            path,
+            Node::File {
+                data: data.to_vec(),
+                mode: 0o644,
+            },
+        );
     }
 
     /// Adds a durable directory (test setup).
     pub fn put_dir(&self, path: &str) {
-        self.put(path, Node::Dir { entries: BTreeMap::new(), mode: 0o755 });
+        self.put(
+            path,
+            Node::Dir {
+                entries: BTreeMap::new(),
+                mode: 0o755,
+            },
+        );
     }
 
     /// Adds a durable hard link `new` to the existing file `existing` (test setup).
     pub fn put_hardlink(&self, existing: &str, new: &str) {
         let mut guard = self.lock_state();
         let st = &mut *guard;
-        let ino = st.lookup_leaf(&RelPath::from_parts(existing.split('/'))).unwrap().expect("exists");
+        let ino = st
+            .lookup_leaf(&RelPath::from_parts(existing.split('/')))
+            .unwrap()
+            .expect("exists");
         let p = RelPath::from_parts(new.split('/'));
         let (dir, leaf) = st.parent_and_leaf(&p).expect("parent exists");
         for img in [&mut st.vol, &mut st.dur] {
@@ -547,7 +676,11 @@ impl SimFs {
         let mut violations = st.violations.clone();
         let mut fi = fates.iter();
         for p in &st.pending {
-            let fate = if p.unsynced.is_empty() { Fate::Apply } else { *fi.next().unwrap_or(&Fate::Drop) };
+            let fate = if p.unsynced.is_empty() {
+                Fate::Apply
+            } else {
+                *fi.next().unwrap_or(&Fate::Drop)
+            };
             apply_op(&mut img, &st.vol, &p.op, fate, &mut violations);
         }
         for &ino in &st.dirty {
@@ -585,13 +718,18 @@ impl SimFs {
     /// The durable image at the moment recovery reported it had stabilized, if it did.
     pub fn durable_at_stabilize(&self) -> Option<SimFs> {
         let st = self.lock_state();
-        st.stabilized.as_ref().map(|s| SimFs::from_state((**s).clone()).durable())
+        st.stabilized
+            .as_ref()
+            .map(|s| SimFs::from_state((**s).clone()).durable())
     }
 
     /// Canonical fingerprint of volatile + durable + pending state, for memoization.
     pub fn fingerprint(&self) -> String {
         let st = self.lock_state();
-        format!("{:?}|{:?}|{:?}|{:?}", st.vol.nodes, st.dur.nodes, st.pending, st.dirty)
+        format!(
+            "{:?}|{:?}|{:?}|{:?}",
+            st.vol.nodes, st.dur.nodes, st.pending, st.dirty
+        )
     }
 }
 
@@ -611,7 +749,9 @@ impl Vfs for SimFs {
     fn read_file(&self, p: &RelPath) -> io::Result<Vec<u8>> {
         let st = self.lock_state();
         st.alive()?;
-        let ino = st.lookup_leaf(p)?.ok_or_else(|| err(io::ErrorKind::NotFound, "no such file"))?;
+        let ino = st
+            .lookup_leaf(p)?
+            .ok_or_else(|| err(io::ErrorKind::NotFound, "no such file"))?;
         match st.vol.nodes.get(&ino) {
             Some(Node::File { data, .. }) => Ok(data.clone()),
             _ => Err(err(io::ErrorKind::InvalidInput, "not a regular file")),
@@ -622,7 +762,11 @@ impl Vfs for SimFs {
         let st = self.lock_state();
         st.alive()?;
         let dir = st.vol.resolve_dir(p, st.ci())?;
-        Ok(st.vol.entries(dir).map(|e| e.keys().cloned().collect()).unwrap_or_default())
+        Ok(st
+            .vol
+            .entries(dir)
+            .map(|e| e.keys().cloned().collect())
+            .unwrap_or_default())
     }
 
     fn create_file(&self, p: &RelPath, data: &[u8], mode: Option<u32>) -> io::Result<Meta> {
@@ -633,17 +777,29 @@ impl Vfs for SimFs {
             return Err(err(io::ErrorKind::AlreadyExists, "exists"));
         }
         let ino = st.fresh_ino();
-        st.vol.nodes.insert(ino, Node::File { data: data.to_vec(), mode: mode.unwrap_or(0o644) });
+        st.vol.nodes.insert(
+            ino,
+            Node::File {
+                data: data.to_vec(),
+                mode: mode.unwrap_or(0o644),
+            },
+        );
         st.vol.entries_mut(dir).unwrap().insert(leaf.clone(), ino);
         st.dirty.insert(ino);
-        st.record(Op::Link { dir, name: leaf, ino });
+        st.record(Op::Link {
+            dir,
+            name: leaf,
+            ino,
+        });
         Ok(st.meta(ino))
     }
 
     fn append(&self, p: &RelPath, data: &[u8]) -> io::Result<()> {
         let mut st = self.lock_state();
         st.count()?;
-        let ino = st.lookup_leaf(p)?.ok_or_else(|| err(io::ErrorKind::NotFound, "no such file"))?;
+        let ino = st
+            .lookup_leaf(p)?
+            .ok_or_else(|| err(io::ErrorKind::NotFound, "no such file"))?;
         match st.vol.nodes.get_mut(&ino) {
             Some(Node::File { data: d, .. }) => d.extend_from_slice(data),
             _ => return Err(err(io::ErrorKind::InvalidInput, "not a regular file")),
@@ -660,9 +816,19 @@ impl Vfs for SimFs {
             return Err(err(io::ErrorKind::AlreadyExists, "exists"));
         }
         let ino = st.fresh_ino();
-        st.vol.nodes.insert(ino, Node::Dir { entries: BTreeMap::new(), mode: 0o755 });
+        st.vol.nodes.insert(
+            ino,
+            Node::Dir {
+                entries: BTreeMap::new(),
+                mode: 0o755,
+            },
+        );
         st.vol.entries_mut(dir).unwrap().insert(leaf.clone(), ino);
-        st.record(Op::Link { dir, name: leaf, ino });
+        st.record(Op::Link {
+            dir,
+            name: leaf,
+            ino,
+        });
         Ok(st.meta(ino))
     }
 
@@ -676,14 +842,20 @@ impl Vfs for SimFs {
         let mut st = self.lock_state();
         st.count()?;
         if !st.cfg.noreplace {
-            return Err(err(io::ErrorKind::Unsupported, "RENAME_NOREPLACE unsupported (EINVAL)"));
+            return Err(err(
+                io::ErrorKind::Unsupported,
+                "RENAME_NOREPLACE unsupported (EINVAL)",
+            ));
         }
         let (fdir, fleaf) = st.parent_and_leaf(from)?;
         let (tdir, tleaf) = st.parent_and_leaf(to)?;
         st.check_parent(fdir, expect_from_parent)?;
         st.check_parent(tdir, expect_to_parent)?;
         let ci = st.ci();
-        let (fname, ino) = st.vol.lookup(fdir, &fleaf, ci).ok_or_else(|| err(io::ErrorKind::NotFound, "no source"))?;
+        let (fname, ino) = st
+            .vol
+            .lookup(fdir, &fleaf, ci)
+            .ok_or_else(|| err(io::ErrorKind::NotFound, "no source"))?;
         if st.vol.lookup(tdir, &tleaf, ci).is_some() {
             return Err(err(io::ErrorKind::AlreadyExists, "destination exists"));
         }
@@ -715,7 +887,14 @@ impl Vfs for SimFs {
         if !st.cfg.stable_ids {
             *st.id_salt.entry(ino).or_insert(0) += 1;
         }
-        st.record(Op::Rename { fdir, fname, tdir, tname: tleaf, ino, is_dir });
+        st.record(Op::Rename {
+            fdir,
+            fname,
+            tdir,
+            tname: tleaf,
+            ino,
+            is_dir,
+        });
         Ok(())
     }
 
@@ -724,7 +903,10 @@ impl Vfs for SimFs {
         st.count()?;
         let (dir, leaf) = st.parent_and_leaf(p)?;
         st.check_parent(dir, expect_parent)?;
-        let (name, ino) = st.vol.lookup(dir, &leaf, st.ci()).ok_or_else(|| err(io::ErrorKind::NotFound, "no entry"))?;
+        let (name, ino) = st
+            .vol
+            .lookup(dir, &leaf, st.ci())
+            .ok_or_else(|| err(io::ErrorKind::NotFound, "no entry"))?;
         if matches!(st.vol.nodes.get(&ino), Some(Node::Dir { .. })) {
             return Err(err(io::ErrorKind::IsADirectory, "is a directory"));
         }
@@ -737,10 +919,15 @@ impl Vfs for SimFs {
         let mut st = self.lock_state();
         st.count()?;
         let (dir, leaf) = st.parent_and_leaf(p)?;
-        let (name, ino) = st.vol.lookup(dir, &leaf, st.ci()).ok_or_else(|| err(io::ErrorKind::NotFound, "no entry"))?;
+        let (name, ino) = st
+            .vol
+            .lookup(dir, &leaf, st.ci())
+            .ok_or_else(|| err(io::ErrorKind::NotFound, "no entry"))?;
         match st.vol.entries(ino) {
             None => return Err(err(io::ErrorKind::NotADirectory, "not a directory")),
-            Some(e) if !e.is_empty() => return Err(err(io::ErrorKind::DirectoryNotEmpty, "not empty")),
+            Some(e) if !e.is_empty() => {
+                return Err(err(io::ErrorKind::DirectoryNotEmpty, "not empty"));
+            }
             Some(_) => {}
         }
         st.vol.entries_mut(dir).unwrap().remove(&name);
@@ -751,7 +938,9 @@ impl Vfs for SimFs {
     fn sync_file(&self, p: &RelPath) -> io::Result<()> {
         let mut st = self.lock_state();
         st.count()?;
-        let ino = st.lookup_leaf(p)?.ok_or_else(|| err(io::ErrorKind::NotFound, "no such file"))?;
+        let ino = st
+            .lookup_leaf(p)?
+            .ok_or_else(|| err(io::ErrorKind::NotFound, "no such file"))?;
         let node = st.vol.nodes.get(&ino).cloned();
         match node {
             Some(Node::File { data, mode }) => {

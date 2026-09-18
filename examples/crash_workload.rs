@@ -8,7 +8,13 @@ const FILES: usize = 16;
 
 fn generation(root: &Path) -> u64 {
     let gens: Vec<u64> = (0..FILES)
-        .map(|i| std::fs::read_to_string(root.join(format!("f{i}"))).unwrap().trim().parse().unwrap())
+        .map(|i| {
+            std::fs::read_to_string(root.join(format!("f{i}")))
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap()
+        })
         .collect();
     assert!(gens.iter().all(|&g| g == gens[0]), "torn state: {gens:?}");
     gens[0]

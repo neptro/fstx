@@ -97,9 +97,10 @@ impl RelPath {
 
     /// True if the first component is the private directory (case-insensitively).
     pub(crate) fn is_private(&self) -> bool {
-        self.0
-            .first()
-            .is_some_and(|c| c.to_str().is_some_and(|s| s.eq_ignore_ascii_case(PRIVATE_DIR)))
+        self.0.first().is_some_and(|c| {
+            c.to_str()
+                .is_some_and(|s| s.eq_ignore_ascii_case(PRIVATE_DIR))
+        })
     }
 }
 
@@ -117,7 +118,10 @@ fn component_ok(c: &OsStr) -> bool {
 /// Validates a caller-supplied path. Rejects: empty, absolute/prefixed, `..`, NUL bytes,
 /// and anything whose first component is `.fstx` (any ASCII case). `.` components are dropped.
 pub(crate) fn validate_user_path(p: &Path) -> Result<RelPath> {
-    let bad = |reason| Error::InvalidPath { path: p.to_path_buf(), reason };
+    let bad = |reason| Error::InvalidPath {
+        path: p.to_path_buf(),
+        reason,
+    };
     let mut parts = Vec::new();
     for c in p.components() {
         match c {
@@ -191,7 +195,7 @@ pub(crate) fn hex(b: &[u8]) -> String {
 }
 
 pub(crate) fn unhex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     (0..s.len())
@@ -206,8 +210,21 @@ mod tests {
 
     #[test]
     fn rejects_escapes_and_reserved() {
-        for bad in ["", "/etc/passwd", "../x", "a/../../b", "a/..", ".fstx", ".FSTX/x", ".", "./"] {
-            assert!(validate_user_path(Path::new(bad)).is_err(), "{bad:?} accepted");
+        for bad in [
+            "",
+            "/etc/passwd",
+            "../x",
+            "a/../../b",
+            "a/..",
+            ".fstx",
+            ".FSTX/x",
+            ".",
+            "./",
+        ] {
+            assert!(
+                validate_user_path(Path::new(bad)).is_err(),
+                "{bad:?} accepted"
+            );
         }
     }
 
@@ -231,8 +248,17 @@ mod tests {
 
     #[test]
     fn serde_rejects_escape_components() {
-        for bad in [r#"["2e2e"]"#, r#"["2f"]"#, r#"[""]"#, r#"["00"]"#, r#"["zz"]"#] {
-            assert!(serde_json::from_str::<RelPath>(bad).is_err(), "{bad} accepted");
+        for bad in [
+            r#"["2e2e"]"#,
+            r#"["2f"]"#,
+            r#"[""]"#,
+            r#"["00"]"#,
+            r#"["zz"]"#,
+        ] {
+            assert!(
+                serde_json::from_str::<RelPath>(bad).is_err(),
+                "{bad} accepted"
+            );
         }
     }
 }

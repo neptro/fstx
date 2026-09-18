@@ -65,9 +65,17 @@ pub(crate) fn classify(vfs: &dyn Vfs, plan: &Plan) -> io::Result<Vec<Result<Pos,
         out.push(match (hits.as_slice(), foreign) {
             (_, Some(p)) => Err(format!("unknown entry at {p:?}")),
             ([i], None) => Ok(Pos::At(*i)),
-            ([i, j], None) if *j == i + 1 && tok.kind == crate::vfs::Kind::File => Ok(Pos::Both(*i)),
-            ([], None) => Err(format!("token {:?} not found at any of its locations", tok.id)),
-            (_, None) => Err(format!("token {:?} found at several locations {hits:?}", tok.id)),
+            ([i, j], None) if *j == i + 1 && tok.kind == crate::vfs::Kind::File => {
+                Ok(Pos::Both(*i))
+            }
+            ([], None) => Err(format!(
+                "token {:?} not found at any of its locations",
+                tok.id
+            )),
+            (_, None) => Err(format!(
+                "token {:?} found at several locations {hits:?}",
+                tok.id
+            )),
         });
     }
     Ok(out)
@@ -97,8 +105,20 @@ fn check_shape(plan: &Plan, pos: &[Pos]) -> Result<(), String> {
 /// The progress log is a lower bound: logged-done work must be observed as done.
 fn check_progress(plan: &Plan, recs: &[Record], pos: &[Pos]) -> Result<(), String> {
     let n = plan.waves.len();
-    let apply_done = recs.iter().filter_map(|r| match r { Record::ApplyDone(w) => Some(*w as usize), _ => None }).max();
-    let undo_min = recs.iter().filter_map(|r| match r { Record::UndoDone(w) => Some(*w as usize), _ => None }).min();
+    let apply_done = recs
+        .iter()
+        .filter_map(|r| match r {
+            Record::ApplyDone(w) => Some(*w as usize),
+            _ => None,
+        })
+        .max();
+    let undo_min = recs
+        .iter()
+        .filter_map(|r| match r {
+            Record::UndoDone(w) => Some(*w as usize),
+            _ => None,
+        })
+        .min();
     if apply_done.is_some_and(|w| w >= n) || undo_min.is_some_and(|w| w >= n) {
         return Err("progress names a wave that does not exist".into());
     }
@@ -110,7 +130,9 @@ fn check_progress(plan: &Plan, recs: &[Record], pos: &[Pos]) -> Result<(), Strin
                 return Err(format!("wave {w} logged as undone but not observed undone"));
             }
             if apply_done.is_some_and(|a| w <= a) && w + 1 < undo_from && st != StepState::Post {
-                return Err(format!("wave {w} logged as applied but not observed applied"));
+                return Err(format!(
+                    "wave {w} logged as applied but not observed applied"
+                ));
             }
         }
     }
@@ -120,16 +142,21 @@ fn check_progress(plan: &Plan, recs: &[Record], pos: &[Pos]) -> Result<(), Strin
 /// fsyncs the parent directory of `loc` if it resolves to the journaled identity.
 /// An unresolvable parent means an ancestor token is elsewhere, which by wave ordering
 /// implies this location's changes are already durable or never happened (DESIGN.md §4).
-fn sync_parent(vfs: &dyn Vfs, path: &RelPath, expect: FileId, done: &mut BTreeSet<RelPath>) -> io::Result<()> {
+fn sync_parent(
+    vfs: &dyn Vfs,
+    path: &RelPath,
+    expect: FileId,
+    done: &mut BTreeSet<RelPath>,
+) -> io::Result<()> {
     let parent = path.parent().unwrap_or_default();
     if done.contains(&parent) {
         return Ok(());
     }
-    if let Some(m) = vfs.stat(&parent)? {
-        if m.id == expect {
-            vfs.sync_dir(&parent)?;
-            done.insert(parent);
-        }
+    if let Some(m) = vfs.stat(&parent)?
+        && m.id == expect
+    {
+        vfs.sync_dir(&parent)?;
+        done.insert(parent);
     }
     Ok(())
 }
@@ -158,7 +185,10 @@ fn read_progress(vfs: &dyn Vfs, tx: &TxDir) -> io::Result<Vec<Record>> {
 }
 
 fn required(tx: &TxDir, reason: impl Into<String>) -> Error {
-    Error::RecoveryRequired { tx: tx.name.clone(), reason: reason.into() }
+    Error::RecoveryRequired {
+        tx: tx.name.clone(),
+        reason: reason.into(),
+    }
 }
 
 /// Classification + shape + progress checks. No mutation.
@@ -206,7 +236,12 @@ pub(crate) fn rollback(vfs: &dyn Vfs, tx: &TxDir, j: &Journal) -> Result<()> {
                 }
                 Pos::At(i) if i <= s.from => {}
                 Pos::Both(i) if i < s.from => {}
-                other => return Err(required(tx, format!("token {} at {other:?} during undo of wave {w}", s.token))),
+                other => {
+                    return Err(required(
+                        tx,
+                        format!("token {} at {other:?} during undo of wave {w}", s.token),
+                    ));
+                }
             }
         }
         barrier(vfs, plan, wave)?;
@@ -238,7 +273,9 @@ pub(crate) fn decide(vfs: &dyn Vfs, tx: &TxDir) -> io::Result<Decision> {
     let rolling = tx.has_marker(vfs, Marker::RollingBack)?;
     let rolled = tx.has_marker(vfs, Marker::RolledBack)?;
     if committed && (rolling || rolled) {
-        return Ok(Decision::Required("both COMMITTED and rollback markers present".into()));
+        return Ok(Decision::Required(
+            "both COMMITTED and rollback markers present".into(),
+        ));
     }
     if committed {
         return Ok(Decision::Committed);
@@ -252,7 +289,9 @@ pub(crate) fn decide(vfs: &dyn Vfs, tx: &TxDir) -> io::Result<Decision> {
             None => false,
         };
         return Ok(if backup_used || rolling {
-            Decision::Required("no journal, but the transaction has progressed past preparation".into())
+            Decision::Required(
+                "no journal, but the transaction has progressed past preparation".into(),
+            )
         } else {
             Decision::Discard
         });

@@ -67,7 +67,10 @@ pub enum Error {
     /// The commit failed and the in-process rollback failed too. The durable state is left
     /// for [`crate::recover`].
     #[error("commit failed ({cause}) and rollback failed ({rollback}); run fstx::recover")]
-    RollbackFailed { cause: Box<Error>, rollback: Box<Error> },
+    RollbackFailed {
+        cause: Box<Error>,
+        rollback: Box<Error>,
+    },
 
     #[error(transparent)]
     Io(#[from] io::Error),

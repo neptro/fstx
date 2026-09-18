@@ -55,7 +55,9 @@ pub struct Transaction {
 
 impl std::fmt::Debug for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Transaction").field("tx", &self.tx.name).finish_non_exhaustive()
+        f.debug_struct("Transaction")
+            .field("tx", &self.tx.name)
+            .finish_non_exhaustive()
     }
 }
 
@@ -65,7 +67,11 @@ fn tx_name() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("{TX_PREFIX}{nanos:x}-{:x}-{:x}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed))
+    format!(
+        "{TX_PREFIX}{nanos:x}-{:x}-{:x}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    )
 }
 
 pub(crate) fn ensure_private_dir(vfs: &dyn Vfs) -> Result<()> {
@@ -144,7 +150,9 @@ impl Transaction {
         let mode = self.overlay.check_write(&*self.vfs, &p)?;
         let n = self.next_blob;
         self.next_blob += 1;
-        let meta = self.vfs.create_file(&self.blob_path(n), data.as_ref(), mode)?;
+        let meta = self
+            .vfs
+            .create_file(&self.blob_path(n), data.as_ref(), mode)?;
         self.blobs.insert(n, meta.id);
         self.overlay.apply_write(&*self.vfs, &p, n, mode)
     }
@@ -206,7 +214,12 @@ impl Transaction {
             tx.gc(vfs)?;
             return Ok(());
         }
-        let j = Journal { format: FORMAT, tx: tx.name.clone(), root: vfs.root_id()?, plan };
+        let j = Journal {
+            format: FORMAT,
+            tx: tx.name.clone(),
+            root: vfs.root_id()?,
+            plan,
+        };
         if let Err(e) = prepare(vfs, &tx, &j) {
             // The tree has not been touched yet.
             let _ = tx.gc(vfs);
@@ -216,11 +229,17 @@ impl Transaction {
         if let Err(cause) = apply(vfs, &tx, &j.plan) {
             return match recover::rollback(vfs, &tx, &j) {
                 Ok(()) => Err(cause.into()),
-                Err(rb) => Err(Error::RollbackFailed { cause: Box::new(cause.into()), rollback: Box::new(rb) }),
+                Err(rb) => Err(Error::RollbackFailed {
+                    cause: Box::new(cause.into()),
+                    rollback: Box::new(rb),
+                }),
             };
         }
         if let Err(source) = tx.set_marker(vfs, Marker::Committed) {
-            return Err(Error::CommitOutcomeUnknown { tx: tx.name.clone(), source });
+            return Err(Error::CommitOutcomeUnknown {
+                tx: tx.name.clone(),
+                source,
+            });
         }
         vfs.event("committed");
         // Best effort: leftovers are settled by the next recovery otherwise.

@@ -106,7 +106,10 @@ pub(crate) fn compile(
         }
     }
 
-    let attach: Vec<(RelPath, Entry)> = placements.into_iter().filter(|(p, _)| !noop.contains(p)).collect();
+    let attach: Vec<(RelPath, Entry)> = placements
+        .into_iter()
+        .filter(|(p, _)| !noop.contains(p))
+        .collect();
     let attached_origin: BTreeMap<RelPath, RelPath> = attach
         .iter()
         .filter_map(|(p, e)| base_origin(e).map(|o| (o.clone(), p.clone())))
@@ -120,7 +123,9 @@ pub(crate) fn compile(
         if !attached_origin.contains_key(b) {
             // Removed; skip if it will leave together with a removed ancestor.
             let covered = b.proper_prefixes().any(|a| {
-                ov.detached.contains_key(&a) && !attached_origin.contains_key(&a) && !noop.contains(&a)
+                ov.detached.contains_key(&a)
+                    && !attached_origin.contains_key(&a)
+                    && !noop.contains(&a)
             });
             if covered {
                 continue;
@@ -158,8 +163,14 @@ pub(crate) fn compile(
             return Ok(root_id);
         }
         match ov.resolve(vfs, &q)? {
-            Some(Entry { kind: EKind::Dir, src: Src::Base { id, .. } }) => Ok(id),
-            Some(Entry { kind: EKind::Dir, src: Src::NewDir { n } }) => Ok(new_dir_ids[&n]),
+            Some(Entry {
+                kind: EKind::Dir,
+                src: Src::Base { id, .. },
+            }) => Ok(id),
+            Some(Entry {
+                kind: EKind::Dir,
+                src: Src::NewDir { n },
+            }) => Ok(new_dir_ids[&n]),
             _ => Err(Error::NotFound(q.to_path_buf())),
         }
     };
@@ -170,18 +181,41 @@ pub(crate) fn compile(
 
     for (k, (b, id, kind)) in detach.iter().enumerate() {
         let parent = b.parent().unwrap_or_default();
-        let parent_id = if parent.is_root() { root_id } else { dir_id(&parent)? };
+        let parent_id = if parent.is_root() {
+            root_id
+        } else {
+            dir_id(&parent)?
+        };
         let mut locs = vec![
-            Loc { path: b.clone(), parent: parent_id },
-            Loc { path: tx.backup().join(k.to_string()), parent: backup_id },
+            Loc {
+                path: b.clone(),
+                parent: parent_id,
+            },
+            Loc {
+                path: tx.backup().join(k.to_string()),
+                parent: backup_id,
+            },
         ];
         let t = plan.tokens.len();
         if let Some(p) = attached_origin.get(b) {
-            locs.push(Loc { path: p.clone(), parent: view_parent_id(p)? });
-            attach_steps.entry(p.depth()).or_default().push(Step { token: t, from: 1 });
+            locs.push(Loc {
+                path: p.clone(),
+                parent: view_parent_id(p)?,
+            });
+            attach_steps
+                .entry(p.depth())
+                .or_default()
+                .push(Step { token: t, from: 1 });
         }
-        detach_steps.entry(b.depth()).or_default().push(Step { token: t, from: 0 });
-        plan.tokens.push(Token { kind: token_kind(*kind, b)?, id: *id, locs });
+        detach_steps
+            .entry(b.depth())
+            .or_default()
+            .push(Step { token: t, from: 0 });
+        plan.tokens.push(Token {
+            kind: token_kind(*kind, b)?,
+            id: *id,
+            locs,
+        });
     }
 
     for (p, e) in &attach {
@@ -195,11 +229,20 @@ pub(crate) fn compile(
             kind,
             id,
             locs: vec![
-                Loc { path: tx.staged().join(staged_name), parent: staged_id },
-                Loc { path: p.clone(), parent: view_parent_id(p)? },
+                Loc {
+                    path: tx.staged().join(staged_name),
+                    parent: staged_id,
+                },
+                Loc {
+                    path: p.clone(),
+                    parent: view_parent_id(p)?,
+                },
             ],
         });
-        attach_steps.entry(p.depth()).or_default().push(Step { token: t, from: 0 });
+        attach_steps
+            .entry(p.depth())
+            .or_default()
+            .push(Step { token: t, from: 0 });
     }
 
     plan.waves.extend(detach_steps.into_values().rev());
@@ -222,7 +265,10 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), String> {
     let mut step_wave: Vec<BTreeMap<usize, usize>> = vec![BTreeMap::new(); n];
     for (w, wave) in plan.waves.iter().enumerate() {
         for s in wave {
-            let tok = plan.tokens.get(s.token).ok_or("step names an unknown token")?;
+            let tok = plan
+                .tokens
+                .get(s.token)
+                .ok_or("step names an unknown token")?;
             if s.from + 1 >= tok.locs.len() {
                 return Err("step moves beyond the token's last location".into());
             }
@@ -244,7 +290,12 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), String> {
     }
     for (t, tok) in plan.tokens.iter().enumerate() {
         let waves: Vec<usize> = (0..tok.locs.len() - 1)
-            .map(|f| step_wave[t].get(&f).copied().ok_or_else(|| format!("token {t} misses step {f}")))
+            .map(|f| {
+                step_wave[t]
+                    .get(&f)
+                    .copied()
+                    .ok_or_else(|| format!("token {t} misses step {f}"))
+            })
             .collect::<Result<_, _>>()?;
         if waves.windows(2).any(|w| w[0] >= w[1]) {
             return Err(format!("token {t}: steps not in strictly increasing waves"));
@@ -264,7 +315,10 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), String> {
             }
             let (src, dst) = (plan.src(*s), plan.dst(*s));
             if let Some(t) = at(&snapshot, &dst.path) {
-                return Err(format!("wave {w}: destination {:?} occupied by token {t}", dst.path));
+                return Err(format!(
+                    "wave {w}: destination {:?} occupied by token {t}",
+                    dst.path
+                ));
             }
             for loc in [src, dst] {
                 let parent = loc.path.parent().unwrap_or_default();
@@ -274,13 +328,16 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), String> {
                         continue;
                     }
                     if tok.locs[snapshot[t]].path != parent {
-                        return Err(format!("wave {w}: parent {parent:?} of {:?} not in place yet", loc.path));
+                        return Err(format!(
+                            "wave {w}: parent {parent:?} of {:?} not in place yet",
+                            loc.path
+                        ));
                     }
                 }
-                if let Some(t) = at(&snapshot, &parent) {
-                    if plan.tokens[t].id != loc.parent {
-                        return Err(format!("wave {w}: parent identity mismatch at {parent:?}"));
-                    }
+                if let Some(t) = at(&snapshot, &parent)
+                    && plan.tokens[t].id != loc.parent
+                {
+                    return Err(format!("wave {w}: parent identity mismatch at {parent:?}"));
                 }
             }
         }
@@ -319,19 +376,52 @@ mod tests {
     fn sample() -> Plan {
         Plan {
             tokens: vec![
-                Token { kind: Kind::File, id: id(11), locs: vec![
-                    Loc { path: p("a/old"), parent: id(10) },
-                    Loc { path: p(".fstx/tx-1/backup/0"), parent: id(BK) },
-                ]},
-                Token { kind: Kind::Dir, id: id(10), locs: vec![
-                    Loc { path: p("a"), parent: id(ROOT) },
-                    Loc { path: p(".fstx/tx-1/backup/1"), parent: id(BK) },
-                    Loc { path: p("z"), parent: id(ROOT) },
-                ]},
-                Token { kind: Kind::File, id: id(20), locs: vec![
-                    Loc { path: p(".fstx/tx-1/staged/b0"), parent: id(ST) },
-                    Loc { path: p("z/new"), parent: id(10) },
-                ]},
+                Token {
+                    kind: Kind::File,
+                    id: id(11),
+                    locs: vec![
+                        Loc {
+                            path: p("a/old"),
+                            parent: id(10),
+                        },
+                        Loc {
+                            path: p(".fstx/tx-1/backup/0"),
+                            parent: id(BK),
+                        },
+                    ],
+                },
+                Token {
+                    kind: Kind::Dir,
+                    id: id(10),
+                    locs: vec![
+                        Loc {
+                            path: p("a"),
+                            parent: id(ROOT),
+                        },
+                        Loc {
+                            path: p(".fstx/tx-1/backup/1"),
+                            parent: id(BK),
+                        },
+                        Loc {
+                            path: p("z"),
+                            parent: id(ROOT),
+                        },
+                    ],
+                },
+                Token {
+                    kind: Kind::File,
+                    id: id(20),
+                    locs: vec![
+                        Loc {
+                            path: p(".fstx/tx-1/staged/b0"),
+                            parent: id(ST),
+                        },
+                        Loc {
+                            path: p("z/new"),
+                            parent: id(10),
+                        },
+                    ],
+                },
             ],
             waves: vec![
                 vec![Step { token: 0, from: 0 }],
@@ -392,14 +482,34 @@ mod tests {
     fn shared_ancestors_are_allowed() {
         let plan = Plan {
             tokens: vec![
-                Token { kind: Kind::File, id: id(11), locs: vec![
-                    Loc { path: p("d/x"), parent: id(9) },
-                    Loc { path: p(".fstx/t/backup/0"), parent: id(BK) },
-                ]},
-                Token { kind: Kind::File, id: id(12), locs: vec![
-                    Loc { path: p("d/y"), parent: id(9) },
-                    Loc { path: p(".fstx/t/backup/1"), parent: id(BK) },
-                ]},
+                Token {
+                    kind: Kind::File,
+                    id: id(11),
+                    locs: vec![
+                        Loc {
+                            path: p("d/x"),
+                            parent: id(9),
+                        },
+                        Loc {
+                            path: p(".fstx/t/backup/0"),
+                            parent: id(BK),
+                        },
+                    ],
+                },
+                Token {
+                    kind: Kind::File,
+                    id: id(12),
+                    locs: vec![
+                        Loc {
+                            path: p("d/y"),
+                            parent: id(9),
+                        },
+                        Loc {
+                            path: p(".fstx/t/backup/1"),
+                            parent: id(BK),
+                        },
+                    ],
+                },
             ],
             waves: vec![vec![Step { token: 0, from: 0 }, Step { token: 1, from: 0 }]],
         };

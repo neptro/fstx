@@ -7,7 +7,10 @@ use std::path::Path;
 
 /// A scratch root on the build filesystem (not tmpfs), so fsync does real work.
 pub fn scratch() -> tempfile::TempDir {
-    tempfile::Builder::new().prefix("fstx-test-").tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap()
+    tempfile::Builder::new()
+        .prefix("fstx-test-")
+        .tempdir_in(env!("CARGO_TARGET_TMPDIR"))
+        .unwrap()
 }
 
 /// path -> (is_dir, content, inode), excluding `.fstx`.

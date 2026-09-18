@@ -11,8 +11,8 @@ use std::os::fd::OwnedFd;
 use std::path::Path;
 
 use rustix::fs::{
-    AtFlags, Dir, FileType, Mode, OFlags, RenameFlags, ResolveFlags, Stat, fchmod, fstat,
-    fstatfs, fsync, mkdirat, openat, openat2, renameat_with, statat, unlinkat,
+    AtFlags, Dir, FileType, Mode, OFlags, RenameFlags, ResolveFlags, Stat, fchmod, fstat, fstatfs,
+    fsync, mkdirat, openat, openat2, renameat_with, statat, unlinkat,
 };
 use rustix::io::Errno;
 
@@ -46,7 +46,10 @@ fn meta(st: &Stat) -> Meta {
     };
     Meta {
         kind,
-        id: FileId { dev: st.st_dev, ino: st.st_ino },
+        id: FileId {
+            dev: st.st_dev,
+            ino: st.st_ino,
+        },
         len: st.st_size as u64,
         mode: st.st_mode & 0o7777,
         #[allow(clippy::useless_conversion)]
@@ -65,14 +68,22 @@ fn is_absent(e: Errno) -> bool {
 
 impl LinuxFs {
     pub(crate) fn open(root: &Path) -> io::Result<LinuxFs> {
-        let fd = rustix::fs::open(root, OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC, Mode::empty())?;
+        let fd = rustix::fs::open(
+            root,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )?;
         let root_dev = fstat(&fd)?.st_dev;
         let has_openat2 = match openat2(&fd, ".", DIR_FLAGS, Mode::empty(), resolve_flags()) {
             Ok(_) => true,
             Err(Errno::NOSYS) => false,
             Err(e) => return Err(e.into()),
         };
-        Ok(LinuxFs { root: fd, root_dev, has_openat2 })
+        Ok(LinuxFs {
+            root: fd,
+            root_dev,
+            has_openat2,
+        })
     }
 
     /// Opens the directory at `rel` beneath the root without following any symlink.
@@ -88,7 +99,13 @@ impl LinuxFs {
                 }
                 joined.push(c);
             }
-            return openat2(&self.root, joined.as_os_str(), DIR_FLAGS, Mode::empty(), resolve_flags());
+            return openat2(
+                &self.root,
+                joined.as_os_str(),
+                DIR_FLAGS,
+                Mode::empty(),
+                resolve_flags(),
+            );
         }
         let mut cur = openat(&self.root, ".", DIR_FLAGS, Mode::empty())?;
         for c in rel.components() {
@@ -109,7 +126,11 @@ impl LinuxFs {
         let fd = self.open_dir(&p.parent().unwrap_or_default())?;
         if let Some(want) = expect {
             let st = fstat(&fd)?;
-            if (FileId { dev: st.st_dev, ino: st.st_ino }) != want {
+            if (FileId {
+                dev: st.st_dev,
+                ino: st.st_ino,
+            }) != want
+            {
                 return Err(parent_mismatch());
             }
         }
@@ -118,9 +139,17 @@ impl LinuxFs {
 
     fn open_regular(&self, p: &RelPath, flags: OFlags) -> io::Result<File> {
         let pfd = self.open_parent(p, None)?;
-        let fd = openat(&pfd, leaf(p)?, flags | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK, Mode::empty())?;
+        let fd = openat(
+            &pfd,
+            leaf(p)?,
+            flags | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK,
+            Mode::empty(),
+        )?;
         if FileType::from_raw_mode(fstat(&fd)?.st_mode) != FileType::RegularFile {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a regular file"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not a regular file",
+            ));
         }
         Ok(File::from(fd))
     }
@@ -129,7 +158,10 @@ impl LinuxFs {
 impl Vfs for LinuxFs {
     fn root_id(&self) -> io::Result<FileId> {
         let st = fstat(&self.root)?;
-        Ok(FileId { dev: st.st_dev, ino: st.st_ino })
+        Ok(FileId {
+            dev: st.st_dev,
+            ino: st.st_ino,
+        })
     }
 
     fn stat(&self, p: &RelPath) -> io::Result<Option<Meta>> {
@@ -155,7 +187,11 @@ impl Vfs for LinuxFs {
             Err(e) => return Err(e.into()),
         };
         let pst = fstat(&pfd)?;
-        if (FileId { dev: pst.st_dev, ino: pst.st_ino }) != expect_parent {
+        if (FileId {
+            dev: pst.st_dev,
+            ino: pst.st_ino,
+        }) != expect_parent
+        {
             return Ok(Probe::ParentMismatch);
         }
         match statat(&pfd, leaf(p)?, AtFlags::SYMLINK_NOFOLLOW) {
@@ -179,7 +215,8 @@ impl Vfs for LinuxFs {
             let entry = entry?;
             let name = entry.file_name().to_bytes();
             if name != b"." && name != b".." {
-                names.push(<OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(name).to_os_string());
+                names
+                    .push(<OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(name).to_os_string());
             }
         }
         Ok(names)
@@ -187,7 +224,8 @@ impl Vfs for LinuxFs {
 
     fn create_file(&self, p: &RelPath, data: &[u8], mode: Option<u32>) -> io::Result<Meta> {
         let pfd = self.open_parent(p, None)?;
-        let flags = OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+        let flags =
+            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC;
         let fd = openat(&pfd, leaf(p)?, flags, Mode::from_bits_truncate(0o666))?;
         if let Some(m) = mode {
             fchmod(&fd, Mode::from_bits_truncate(m))?;
@@ -217,7 +255,13 @@ impl Vfs for LinuxFs {
     ) -> io::Result<()> {
         let from_fd = self.open_parent(from, expect_from_parent)?;
         let to_fd = self.open_parent(to, expect_to_parent)?;
-        renameat_with(&from_fd, leaf(from)?, &to_fd, leaf(to)?, RenameFlags::NOREPLACE)?;
+        renameat_with(
+            &from_fd,
+            leaf(from)?,
+            &to_fd,
+            leaf(to)?,
+            RenameFlags::NOREPLACE,
+        )?;
         Ok(())
     }
 
@@ -260,7 +304,11 @@ impl Vfs for LinuxFs {
             Err(e) => return Err(e.into()),
         };
         let f = File::from(fd);
-        if exclusive { f.lock()? } else { f.lock_shared()? }
+        if exclusive {
+            f.lock()?
+        } else {
+            f.lock_shared()?
+        }
         Ok(Box::new(f))
     }
 

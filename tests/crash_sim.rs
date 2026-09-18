@@ -93,31 +93,54 @@ fn outcomes(fs: &SimFs, cap: usize) -> Vec<SimFs> {
     let ops = fs.volatile_ops();
     let choices: Vec<Vec<Fate>> = ops
         .iter()
-        .map(|&weak| if weak { vec![Fate::Drop, Fate::Apply, Fate::BothNames] } else { vec![Fate::Drop, Fate::Apply] })
+        .map(|&weak| {
+            if weak {
+                vec![Fate::Drop, Fate::Apply, Fate::BothNames]
+            } else {
+                vec![Fate::Drop, Fate::Apply]
+            }
+        })
         .collect();
     let total: u128 = choices.iter().map(|c| c.len() as u128).product();
     let mut combos: Vec<Vec<Fate>> = Vec::new();
     if total <= cap as u128 {
         for mut idx in 0..total {
-            combos.push(choices.iter().map(|c| {
-                let f = c[(idx % c.len() as u128) as usize];
-                idx /= c.len() as u128;
-                f
-            }).collect());
+            combos.push(
+                choices
+                    .iter()
+                    .map(|c| {
+                        let f = c[(idx % c.len() as u128) as usize];
+                        idx /= c.len() as u128;
+                        f
+                    })
+                    .collect(),
+            );
         }
     } else {
         combos.push(vec![Fate::Drop; ops.len()]);
         combos.push(vec![Fate::Apply; ops.len()]);
         let mut seed = 0x9E37_79B9_7F4A_7C15u64 ^ ops.len() as u64;
         while combos.len() < cap {
-            combos.push(choices.iter().map(|c| {
-                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                c[((seed >> 33) as usize) % c.len()]
-            }).collect());
+            combos.push(
+                choices
+                    .iter()
+                    .map(|c| {
+                        seed = seed
+                            .wrapping_mul(6364136223846793005)
+                            .wrapping_add(1442695040888963407);
+                        c[((seed >> 33) as usize) % c.len()]
+                    })
+                    .collect(),
+            );
         }
     }
     let mut out = vec![fs.process_kill()];
-    out.extend(combos.iter().enumerate().map(|(i, f)| fs.power_loss(f, (i % 4) as u8)));
+    out.extend(
+        combos
+            .iter()
+            .enumerate()
+            .map(|(i, f)| fs.power_loss(f, (i % 4) as u8)),
+    );
     out
 }
 
@@ -126,10 +149,22 @@ fn phi(fs: &SimFs) -> (u8, usize) {
     let d = fs.durable();
     let private = d.private_tree();
     let insp = inspect_on(&d).expect("inspect");
-    let Some(tx) = insp.transactions.first() else { return (0, 0) };
+    let Some(tx) = insp.transactions.first() else {
+        return (0, 0);
+    };
     let has = |m: &str| private.keys().any(|k| k == &format!("{}/{m}", tx.name));
-    let rank = if has("COMMITTED") || has("ROLLED_BACK") { 1 } else if has("ROLLING_BACK") { 2 } else { 3 };
-    let remaining = tx.tokens.iter().map(|t| t.position.as_ref().map(|p| p.index).unwrap_or(0)).sum();
+    let rank = if has("COMMITTED") || has("ROLLED_BACK") {
+        1
+    } else if has("ROLLING_BACK") {
+        2
+    } else {
+        3
+    };
+    let remaining = tx
+        .tokens
+        .iter()
+        .map(|t| t.position.as_ref().map(|p| p.index).unwrap_or(0))
+        .sum();
     (rank, remaining)
 }
 
@@ -145,28 +180,54 @@ fn check_final(ctx: &Ctx, fs: &SimFs, committed_ok: bool, trail: &str) {
     let tree = fs.tree();
     let is_before = tree == ctx.before;
     let is_after = tree == ctx.after;
-    assert!(is_before || is_after, "{trail}: tree is neither before nor after:\n{tree:#?}");
+    assert!(
+        is_before || is_after,
+        "{trail}: tree is neither before nor after:\n{tree:#?}"
+    );
     if committed_ok {
-        assert!(is_after, "{trail}: commit returned Ok but recovery produced the before-state");
+        assert!(
+            is_after,
+            "{trail}: commit returned Ok but recovery produced the before-state"
+        );
     }
-    assert!(fs.private_tree().is_empty(), "{trail}: leftovers {:?}", fs.private_tree().keys());
+    assert!(
+        fs.private_tree().is_empty(),
+        "{trail}: leftovers {:?}",
+        fs.private_tree().keys()
+    );
     assert!(fs.violations().is_empty(), "{trail}: {:?}", fs.violations());
 }
 
-fn explore(ctx: &mut Ctx, state: &SimFs, committed_ok: bool, depth: usize, bound: Option<(u8, usize)>, trail: &str) {
+fn explore(
+    ctx: &mut Ctx,
+    state: &SimFs,
+    committed_ok: bool,
+    depth: usize,
+    bound: Option<(u8, usize)>,
+    trail: &str,
+) {
     let key = state.fingerprint();
     if ctx.memo.get(&key).is_some_and(|&d| d <= depth) {
         return;
     }
     ctx.memo.insert(key, depth);
-    assert!(state.violations().is_empty(), "{trail}: {:?}", state.violations());
+    assert!(
+        state.violations().is_empty(),
+        "{trail}: {:?}",
+        state.violations()
+    );
 
     // Recovery to completion.
     let clean = state.process_kill();
     let start = clean.calls();
     let insp = inspect_on(&clean).expect("inspect");
     for tx in &insp.transactions {
-        assert_ne!(tx.action, RecoveryAction::RecoveryRequired, "{trail}: {:?}", tx.reason);
+        assert_ne!(
+            tx.action,
+            RecoveryAction::RecoveryRequired,
+            "{trail}: {:?}",
+            tx.reason
+        );
     }
     recover_on(&clean, &Options::new()).unwrap_or_else(|e| panic!("{trail}: recovery failed: {e}"));
     ctx.recoveries += 1;
@@ -184,25 +245,44 @@ fn explore(ctx: &mut Ctx, state: &SimFs, committed_ok: bool, depth: usize, bound
         let mut next_bound = bound;
         let durable_phi = phi(&s);
         if let Some(b) = bound {
-            assert!(durable_phi <= b, "{trail}/r{j}: Φ rose from {b:?} to {durable_phi:?}");
+            assert!(
+                durable_phi <= b,
+                "{trail}/r{j}: Φ rose from {b:?} to {durable_phi:?}"
+            );
         }
         if let Some(stab) = s.durable_at_stabilize() {
             let at_stab = phi(&stab);
-            assert!(durable_phi <= at_stab, "{trail}/r{j}: Φ rose after stabilize {at_stab:?} -> {durable_phi:?}");
+            assert!(
+                durable_phi <= at_stab,
+                "{trail}/r{j}: Φ rose after stabilize {at_stab:?} -> {durable_phi:?}"
+            );
             next_bound = Some(next_bound.map_or(durable_phi, |b| b.min(durable_phi)));
         }
         for (k, o) in outcomes(&s, ctx.caps[depth]).into_iter().enumerate() {
             if let Some(b) = next_bound {
                 let p = phi(&o);
-                assert!(p <= b, "{trail}/r{j}/o{k}: outcome Φ {p:?} above bound {b:?}");
+                assert!(
+                    p <= b,
+                    "{trail}/r{j}/o{k}: outcome Φ {p:?} above bound {b:?}"
+                );
             }
-            explore(ctx, &o, committed_ok, depth + 1, next_bound, &format!("{trail}/r{j}/o{k}"));
+            explore(
+                ctx,
+                &o,
+                committed_ok,
+                depth + 1,
+                next_bound,
+                &format!("{trail}/r{j}/o{k}"),
+            );
         }
     }
 }
 
 fn check_scenario(sc: &Scenario, profile: Profile, apply_cap: usize, caps: Vec<usize>) -> usize {
-    let cfg = SimConfig { profile, ..SimConfig::default() };
+    let cfg = SimConfig {
+        profile,
+        ..SimConfig::default()
+    };
     let reference = SimFs::new(cfg);
     (sc.base)(&reference);
     let before = reference.tree();
@@ -210,16 +290,34 @@ fn check_scenario(sc: &Scenario, profile: Profile, apply_cap: usize, caps: Vec<u
     let after = reference.tree();
     assert_ne!(before, after);
     let total = reference.calls();
-    let mut ctx = Ctx { before, after, caps, memo: HashMap::new(), recoveries: 0 };
+    let mut ctx = Ctx {
+        before,
+        after,
+        caps,
+        memo: HashMap::new(),
+        recoveries: 0,
+    };
 
     for i in 0..=total {
         let fs = SimFs::new(cfg);
         (sc.base)(&fs);
         fs.crash_after(i);
         let committed_ok = run_tx(&fs, sc.ops).is_ok();
-        assert!(fs.violations().is_empty(), "{} crash@{i}: {:?}", sc.name, fs.violations());
+        assert!(
+            fs.violations().is_empty(),
+            "{} crash@{i}: {:?}",
+            sc.name,
+            fs.violations()
+        );
         for (k, o) in outcomes(&fs, apply_cap).into_iter().enumerate() {
-            explore(&mut ctx, &o, committed_ok, 0, None, &format!("{} {profile:?} crash@{i}/o{k}", sc.name));
+            explore(
+                &mut ctx,
+                &o,
+                committed_ok,
+                0,
+                None,
+                &format!("{} {profile:?} crash@{i}/o{k}", sc.name),
+            );
         }
     }
     ctx.recoveries
@@ -279,12 +377,21 @@ fn random_deep_nesting() {
     };
     for sc in scenarios().into_iter().chain([tiny()]) {
         for profile in [Profile::Strict, Profile::Weak] {
-            let cfg = SimConfig { profile, ..SimConfig::default() };
+            let cfg = SimConfig {
+                profile,
+                ..SimConfig::default()
+            };
             let reference = SimFs::new(cfg);
             (sc.base)(&reference);
             let before = reference.tree();
             run_tx(&reference, sc.ops).unwrap();
-            let ctx = Ctx { before, after: reference.tree(), caps: vec![], memo: HashMap::new(), recoveries: 0 };
+            let ctx = Ctx {
+                before,
+                after: reference.tree(),
+                caps: vec![],
+                memo: HashMap::new(),
+                recoveries: 0,
+            };
             for walk in 0..150 {
                 let fs = SimFs::new(cfg);
                 (sc.base)(&fs);
@@ -305,8 +412,14 @@ fn random_deep_nesting() {
                     state = outs.swap_remove(rnd(outs.len() as u64) as usize);
                 }
                 let fin = state.process_kill();
-                recover_on(&fin, &Options::new()).unwrap_or_else(|e| panic!("{} walk {walk}: {e}", sc.name));
-                check_final(&ctx, &fin, committed_ok, &format!("{} {profile:?} walk {walk}", sc.name));
+                recover_on(&fin, &Options::new())
+                    .unwrap_or_else(|e| panic!("{} walk {walk}: {e}", sc.name));
+                check_final(
+                    &ctx,
+                    &fin,
+                    committed_ok,
+                    &format!("{} {profile:?} walk {walk}", sc.name),
+                );
             }
         }
     }
@@ -334,14 +447,19 @@ fn classification_matches_ground_truth() {
                     let loc = fstx::RelPath::root();
                     let path = &tok.locations[pos.index];
                     let rel = path.iter().fold(loc, |acc, c| acc.join(c));
-                    let m = o.stat(&rel).unwrap().expect("present at classified location");
+                    let m = o
+                        .stat(&rel)
+                        .unwrap()
+                        .expect("present at classified location");
                     assert_eq!(m.id, tok.id);
                     // And it is not also at any other location, unless both-names.
                     for (k, other) in tok.locations.iter().enumerate() {
                         if k == pos.index || (pos.both_names && k == pos.index + 1) {
                             continue;
                         }
-                        let rel = other.iter().fold(fstx::RelPath::root(), |acc, c| acc.join(c));
+                        let rel = other
+                            .iter()
+                            .fold(fstx::RelPath::root(), |acc, c| acc.join(c));
                         assert!(o.stat(&rel).unwrap().is_none_or(|m| m.id != tok.id));
                     }
                 }
@@ -357,7 +475,11 @@ fn quick_smoke() {
         for sc in scenarios() {
             let t = std::time::Instant::now();
             let n = check_scenario(&sc, profile, 8, vec![]);
-            eprintln!("{} {profile:?}: {n} recoveries in {:?}", sc.name, t.elapsed());
+            eprintln!(
+                "{} {profile:?}: {n} recoveries in {:?}",
+                sc.name,
+                t.elapsed()
+            );
         }
     }
 }

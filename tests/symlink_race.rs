@@ -49,7 +49,10 @@ fn swapped_component_never_escapes_the_root() {
     stop.store(true, Ordering::Relaxed);
     racer.join().unwrap();
 
-    let escaped: Vec<_> = fs::read_dir(outside.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+    let escaped: Vec<_> = fs::read_dir(outside.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
     assert!(escaped.is_empty(), "files escaped the root: {escaped:?}");
     eprintln!("{ok}/300 transactions committed under the race");
     // Both paths must have been exercised for the test to mean anything.

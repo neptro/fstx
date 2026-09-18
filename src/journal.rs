@@ -37,11 +37,14 @@ pub(crate) fn decode(bytes: &[u8], tx_name: &str, root: FileId) -> Result<Journa
         .rposition(|w| w == SEP)
         .ok_or("journal has no checksum")?;
     let (body, rest) = bytes.split_at(cut);
-    let sum = rest[SEP.len()..].strip_suffix(b"\n").ok_or("journal checksum line is torn")?;
+    let sum = rest[SEP.len()..]
+        .strip_suffix(b"\n")
+        .ok_or("journal checksum line is torn")?;
     if sum != hex(blake3::hash(body).as_bytes()).as_bytes() {
         return Err("journal checksum mismatch".into());
     }
-    let j: Journal = serde_json::from_slice(body).map_err(|e| format!("journal does not parse: {e}"))?;
+    let j: Journal =
+        serde_json::from_slice(body).map_err(|e| format!("journal does not parse: {e}"))?;
     if j.format != FORMAT {
         return Err(format!("unknown journal format {}", j.format));
     }
@@ -66,7 +69,10 @@ pub(crate) fn decode(bytes: &[u8], tx_name: &str, root: FileId) -> Result<Journa
                     && c[1] == tx_name
                     && (c[2] == "backup" || c[2] == "staged");
                 if !ok {
-                    return Err(format!("private location {:?} outside this transaction", loc.path));
+                    return Err(format!(
+                        "private location {:?} outside this transaction",
+                        loc.path
+                    ));
                 }
             }
         }
@@ -97,8 +103,14 @@ mod tests {
                     kind: Kind::File,
                     id: fid(5),
                     locs: vec![
-                        Loc { path: RelPath::from_parts([".fstx", "tx-1", "staged", "b0"]), parent: fid(3) },
-                        Loc { path: RelPath::from_parts(["a"]), parent: fid(1) },
+                        Loc {
+                            path: RelPath::from_parts([".fstx", "tx-1", "staged", "b0"]),
+                            parent: fid(3),
+                        },
+                        Loc {
+                            path: RelPath::from_parts(["a"]),
+                            parent: fid(1),
+                        },
                     ],
                 }],
                 waves: vec![vec![Step { token: 0, from: 0 }]],
@@ -133,7 +145,11 @@ mod tests {
     #[test]
     fn rejects_escaping_component_even_with_valid_checksum() {
         let body = String::from_utf8(encode(&sample())).unwrap();
-        let body = body.split("\nblake3:").next().unwrap().replace("\"61\"", "\"2e2e\"");
+        let body = body
+            .split("\nblake3:")
+            .next()
+            .unwrap()
+            .replace("\"61\"", "\"2e2e\"");
         let mut bytes = body.clone().into_bytes();
         bytes.extend_from_slice(SEP);
         bytes.extend_from_slice(hex(blake3::hash(body.as_bytes()).as_bytes()).as_bytes());

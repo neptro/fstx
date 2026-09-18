@@ -1,0 +1,32 @@
+[package]
+name = "fstx-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+fstx = { path = "..", features = ["sim"] }
+
+[[bin]]
+name = "journal"
+path = "fuzz_targets/journal.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "progress"
+path = "fuzz_targets/progress.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "txpath"
+path = "fuzz_targets/txpath.rs"
+test = false
+doc = false
+
+[workspace]

@@ -1,0 +1,41 @@
+name: ci
+on:
+  push:
+  pull_request:
+  schedule: [{ cron: "0 3 * * *" }]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: "clippy, rustfmt" }
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --all-features
+      - run: cargo doc --no-deps --all-features
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89
+      - run: cargo test --all-features --lib
+  other-platforms:
+    # v0.1 has no macOS/Windows backend; this only checks that the crate builds there.
+    strategy: { matrix: { os: [macos-latest, windows-latest] } }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --all-features
+  nightly-deep:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo test --release --all-features -- --ignored
+      - run: cargo install cargo-fuzz
+      - run: cd fuzz && for t in journal progress txpath; do cargo +nightly fuzz run $t -- -max_total_time=120; done
+      - run: sudo apt-get install -y xfsprogs btrfs-progs && sudo ci/crash-real/run.sh

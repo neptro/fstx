@@ -6,7 +6,10 @@ rust-version = "1.89"
 description = "Atomic, crash-safe multi-file transactions for directory trees"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["filesystem", "transaction", "atomic", "crash-safe", "journal"]
+repository = "https://github.com/neptro/fstx"
+homepage = "https://github.com/neptro/fstx"
+documentation = "https://docs.rs/fstx"
+keywords = ["filesystem", "transaction", "atomic", "crash-safe", "rollback"]
 categories = ["filesystem"]
 exclude = ["/ci", "/fuzz", "/.github"]
 

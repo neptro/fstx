@@ -145,14 +145,30 @@ impl Transaction {
     }
 
     /// Replaces or creates the file at `path` (atomic-save semantics: a new inode).
+    ///
+    /// A replaced file keeps its permission bits; a new file gets the umask default.
     pub fn write(&mut self, path: impl AsRef<Path>, data: impl AsRef<[u8]>) -> Result<()> {
-        let p = validate_user_path(path.as_ref())?;
-        let mode = self.overlay.check_write(&*self.vfs, &p)?;
+        self.write_impl(path.as_ref(), data.as_ref(), None)
+    }
+
+    /// Like [`write`](Self::write), but sets the file's permission bits exactly
+    /// (e.g. `0o755` for a script). Only the lower 12 bits (`0o7777`) are used.
+    pub fn write_with_mode(
+        &mut self,
+        path: impl AsRef<Path>,
+        data: impl AsRef<[u8]>,
+        mode: u32,
+    ) -> Result<()> {
+        self.write_impl(path.as_ref(), data.as_ref(), Some(mode & 0o7777))
+    }
+
+    fn write_impl(&mut self, path: &Path, data: &[u8], mode: Option<u32>) -> Result<()> {
+        let p = validate_user_path(path)?;
+        let inherited = self.overlay.check_write(&*self.vfs, &p)?;
+        let mode = mode.or(inherited);
         let n = self.next_blob;
         self.next_blob += 1;
-        let meta = self
-            .vfs
-            .create_file(&self.blob_path(n), data.as_ref(), mode)?;
+        let meta = self.vfs.create_file(&self.blob_path(n), data, mode)?;
         self.blobs.insert(n, meta.id);
         self.overlay.apply_write(&*self.vfs, &p, n, mode)
     }

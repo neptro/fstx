@@ -1,6 +1,6 @@
 [package]
 name = "fstx"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.89"
 description = "Atomic, crash-safe multi-file transactions for directory trees"
@@ -11,7 +11,10 @@ homepage = "https://github.com/neptro/fstx"
 documentation = "https://docs.rs/fstx"
 keywords = ["filesystem", "transaction", "atomic", "crash-safe", "rollback"]
 categories = ["filesystem"]
-exclude = ["/ci", "/fuzz", "/.github"]
+exclude = ["/ci", "/fuzz", "/.github", "/cli"]
+
+[workspace]
+members = ["cli"]
 
 [features]
 # Exposes the in-memory crash-simulating filesystem used by the crash tests.

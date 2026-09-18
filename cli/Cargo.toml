@@ -1,0 +1,27 @@
+[package]
+name = "fstx-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Apply a set of file changes atomically: JSON change sets, dotfile syncs and AI-agent patches, all-or-nothing and crash-safe"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/neptro/fstx"
+homepage = "https://github.com/neptro/fstx"
+readme = "README.md"
+keywords = ["atomic", "cli", "dotfiles", "transaction", "patch"]
+categories = ["command-line-utilities", "filesystem"]
+
+[[bin]]
+name = "fstx"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.23.1"
+clap = { version = "4.6.7", features = ["derive"] }
+fstx = { version = "0.1.1", path = ".." }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"

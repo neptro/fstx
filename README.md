@@ -101,6 +101,19 @@ cargo run --example basic -- /tmp/demo              # apply some changes atomica
 cargo run --example crash_demo --features sim       # watch a crash get rolled back
 ```
 
+## Command-line tool
+
+The companion crate [`fstx-cli`](cli/) provides an `fstx` command that applies a JSON
+list of changes atomically. It suits scripts, dotfile syncs and AI coding agents:
+
+```sh
+cargo install fstx-cli
+fstx apply changes.json -C ./my-project       # all changes, or none
+fstx sync ~/dotfiles -C ~                     # update dotfiles in one transaction
+```
+
+See [cli/README.md](cli/README.md) for the change-set format.
+
 ## How it works
 
 1. Every change is **staged** in a private `.fstx/` directory inside the root. Nothing

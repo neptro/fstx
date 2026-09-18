@@ -207,3 +207,18 @@ fn non_utf8_names() {
     tx.commit().unwrap();
     assert_eq!(fs::read(root.join(name)).unwrap(), b"x");
 }
+
+#[test]
+fn write_with_mode_sets_exact_permissions() {
+    let d = scratch();
+    let root = d.path();
+    fs::write(root.join("old.sh"), "old").unwrap();
+    fs::set_permissions(root.join("old.sh"), fs::Permissions::from_mode(0o600)).unwrap();
+    let mut tx = Transaction::begin(root).unwrap();
+    tx.write_with_mode("new.sh", "#!/bin/sh\n", 0o755).unwrap();
+    tx.write_with_mode("old.sh", "new", 0o700).unwrap();
+    tx.commit().unwrap();
+    let mode = |p: &str| fs::metadata(root.join(p)).unwrap().permissions().mode() & 0o7777;
+    assert_eq!(mode("new.sh"), 0o755);
+    assert_eq!(mode("old.sh"), 0o700);
+}

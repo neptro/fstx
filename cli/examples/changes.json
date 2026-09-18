@@ -1,0 +1,23 @@
+{
+  "ops": [
+    {
+      "op": "mkdir",
+      "path": "config"
+    },
+    {
+      "op": "write",
+      "path": "config/app.toml",
+      "content": "name = \"demo\"\nversion = 2\n"
+    },
+    {
+      "op": "mkdir",
+      "path": "scripts"
+    },
+    {
+      "op": "write",
+      "path": "scripts/start.sh",
+      "content": "echo starting\n",
+      "mode": "755"
+    }
+  ]
+}

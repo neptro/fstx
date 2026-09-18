@@ -1,0 +1,10 @@
+{
+  "expect": {
+    "src/main.rs": { "sha256": "<sha256 of the file the agent read>" },
+    "src/util.rs": { "exists": false }
+  },
+  "ops": [
+    { "op": "replace", "path": "src/main.rs", "find": "fn main() {", "replace": "mod util;\n\nfn main() {" },
+    { "op": "write", "path": "src/util.rs", "content": "pub fn helper() {}\n" }
+  ]
+}

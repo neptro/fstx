@@ -24,7 +24,7 @@ fn sigkill_child_entry() {
     };
     let root = Path::new(&root);
     fstx::recover(root).unwrap();
-    for generation in generation_of(root) + 1.. {
+    for generation in generation_of(root) + 1..=u64::MAX {
         let mut tx = Transaction::begin(root).unwrap();
         for i in 0..FILES {
             tx.write(format!("f{i}"), generation.to_string().repeat(512))

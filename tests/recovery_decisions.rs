@@ -20,7 +20,7 @@ fn ops(tx: &mut Transaction) -> fstx::Result<()> {
 
 /// Runs the transaction until the first call after `event` has happened, then kills the process.
 fn crash_after_event(event: &str, extra: u64) -> (SimFs, SimFs) {
-    for budget in 0.. {
+    for budget in 0..=u64::MAX {
         let fs = base();
         fs.crash_after(budget);
         let _ = Transaction::begin_on(Box::new(fs.clone()), &Options::new()).and_then(|mut tx| {

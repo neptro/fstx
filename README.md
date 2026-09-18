@@ -1,5 +1,7 @@
 # fstx: atomic, crash-safe file transactions for Rust
 
+[![crates.io](https://img.shields.io/crates/v/fstx.svg)](https://crates.io/crates/fstx)
+[![docs.rs](https://img.shields.io/docsrs/fstx)](https://docs.rs/fstx)
 [![CI](https://github.com/neptro/fstx/actions/workflows/ci.yml/badge.svg)](https://github.com/neptro/fstx/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
@@ -47,10 +49,18 @@ crash recovery.
 
 ## Install
 
+```sh
+cargo add fstx
+```
+
+or in `Cargo.toml`:
+
 ```toml
 [dependencies]
-fstx = { git = "https://github.com/neptro/fstx" }
+fstx = "0.1"
 ```
+
+API documentation: [docs.rs/fstx](https://docs.rs/fstx).
 
 Requires Rust 1.89 or newer. Linux only for now (see [Status](#status)).
 

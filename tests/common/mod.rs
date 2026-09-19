@@ -43,7 +43,7 @@ pub fn leftovers(root: &Path) -> Vec<String> {
     match fs::read_dir(root.join(".fstx")) {
         Ok(rd) => rd
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-            .filter(|n| n != "lock")
+            .filter(|n| n != "lock" && n != ".gitignore")
             .collect(),
         Err(_) => Vec::new(),
     }

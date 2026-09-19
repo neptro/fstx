@@ -615,6 +615,15 @@ impl SimFs {
         out
     }
 
+    /// Leftovers under `.fstx` after a settled transaction: everything except the
+    /// permanent `.gitignore`.
+    pub fn private_leftovers(&self) -> Vec<String> {
+        self.private_tree()
+            .into_keys()
+            .filter(|k| k != ".gitignore")
+            .collect()
+    }
+
     /// Allows `n` more counted calls (mutations and syncs), then crashes.
     pub fn crash_after(&self, n: u64) {
         let mut st = self.lock_state();

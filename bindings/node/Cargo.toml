@@ -1,0 +1,19 @@
+[package]
+name = "fstx-node"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+description = "Node.js bindings for fstx (published to npm as @neptro/fstx)"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fstx = { version = "0.1.2", path = "../.." }
+napi = { version = "3.12.6", features = ["napi4"] }
+napi-derive = "3.6.7"
+
+[build-dependencies]
+napi-build = "2.4.3"

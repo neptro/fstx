@@ -141,7 +141,7 @@ fn applies_every_op_together() {
     assert!(
         fs::read_dir(root.join(".fstx"))
             .unwrap()
-            .all(|e| e.unwrap().file_name() == "lock")
+            .all(|e| matches!(e.unwrap().file_name().to_str(), Some("lock" | ".gitignore")))
     );
 }
 

@@ -96,7 +96,7 @@ fn never_prepared_is_discarded() {
     let r = recover(&fs).unwrap();
     assert_eq!(r.discarded.len(), 1);
     assert_eq!(fs.tree(), before);
-    assert!(fs.private_tree().is_empty());
+    assert!(fs.private_leftovers().is_empty());
 }
 
 #[test]
@@ -153,7 +153,7 @@ fn prepared_uncommitted_rolls_back() {
     let r = recover(&fs).unwrap();
     assert_eq!(r.rolled_back.len(), 1);
     assert_eq!(fs.tree(), base().tree());
-    assert!(fs.private_tree().is_empty());
+    assert!(fs.private_leftovers().is_empty());
 }
 
 #[test]

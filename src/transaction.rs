@@ -76,14 +76,25 @@ fn tx_name() -> String {
 
 pub(crate) fn ensure_private_dir(vfs: &dyn Vfs) -> Result<()> {
     match vfs.stat(&private_dir())? {
-        Some(m) if m.kind == Kind::Dir => Ok(()),
-        Some(_) => Err(Error::UnsupportedFileType(private_dir().to_path_buf())),
+        Some(m) if m.kind == Kind::Dir => {}
+        Some(_) => return Err(Error::UnsupportedFileType(private_dir().to_path_buf())),
         None => {
             vfs.mkdir(&private_dir())?;
             vfs.sync_dir(&RelPath::root())?;
-            Ok(())
         }
     }
+    // Keep `.fstx/` out of `git status` (the trick cargo uses for `target/`). Not synced:
+    // losing it in a crash is harmless, and it is recreated on the next `begin`.
+    // Recovery ignores this name.
+    let gitignore = private_dir().join(".gitignore");
+    if vfs.stat(&gitignore)?.is_none() {
+        match vfs.create_file(&gitignore, b"*\n", None) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(())
 }
 
 impl Transaction {

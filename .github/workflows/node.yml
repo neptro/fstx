@@ -1,0 +1,93 @@
+name: node
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+defaults:
+  run:
+    working-directory: bindings/node
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            flags: --use-napi-cross
+          - target: aarch64-unknown-linux-gnu
+            flags: --use-napi-cross
+          - target: x86_64-unknown-linux-musl
+            flags: -x
+          - target: aarch64-unknown-linux-musl
+            flags: -x
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: "${{ matrix.target }}" }
+      - uses: mlugg/setup-zig@v2
+        if: matrix.flags == '-x'
+      - run: cargo install cargo-zigbuild --locked
+        if: matrix.flags == '-x'
+      - run: npm ci
+      - run: npm run build -- --target ${{ matrix.target }} ${{ matrix.flags }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.target }}
+          path: bindings/node/*.node
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        with:
+          name: loader
+          path: |
+            bindings/node/binding.js
+            bindings/node/binding.d.ts
+
+  test-gnu:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy: { matrix: { node: [20, 22, 24] } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: "${{ matrix.node }}" }
+      - run: npm ci
+      - uses: actions/download-artifact@v5
+        with: { name: bindings-x86_64-unknown-linux-gnu, path: bindings/node }
+      - uses: actions/download-artifact@v5
+        with: { name: loader, path: bindings/node }
+      - run: npm test
+
+  test-musl:
+    needs: build
+    runs-on: ubuntu-latest
+    container: node:22-alpine
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm ci
+      - uses: actions/download-artifact@v5
+        with: { name: bindings-x86_64-unknown-linux-musl, path: bindings/node }
+      - uses: actions/download-artifact@v5
+        with: { name: loader, path: bindings/node }
+      - run: node --test __test__/*.test.mjs
+
+  # Assembles the publishable package with all four binaries. Download the
+  # `npm-package` artifact and run `npm publish --access public neptro-fstx-*.tgz`.
+  package:
+    needs: [test-gnu, test-musl]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - uses: actions/download-artifact@v5
+        with: { pattern: bindings-*, path: bindings/node, merge-multiple: true }
+      - uses: actions/download-artifact@v5
+        with: { name: loader, path: bindings/node }
+      - run: ls -la *.node && test "$(ls *.node | wc -l)" = 4
+      - run: npm pack
+      - uses: actions/upload-artifact@v4
+        with: { name: npm-package, path: bindings/node/*.tgz }

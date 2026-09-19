@@ -222,3 +222,32 @@ fn write_with_mode_sets_exact_permissions() {
     assert_eq!(mode("new.sh"), 0o755);
     assert_eq!(mode("old.sh"), 0o700);
 }
+
+#[test]
+fn private_dir_is_invisible_to_git() {
+    use std::process::Command;
+    let d = scratch();
+    let root = d.path();
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .unwrap()
+    };
+    assert!(git(&["init", "-q"]).status.success());
+    let mut tx = Transaction::begin(root).unwrap();
+    tx.write("tracked.txt", "x").unwrap();
+    tx.commit().unwrap();
+    assert_eq!(
+        fs::read_to_string(root.join(".fstx/.gitignore")).unwrap(),
+        "*\n"
+    );
+    let status =
+        String::from_utf8(git(&["status", "--porcelain", "--untracked-files=all"]).stdout).unwrap();
+    assert_eq!(
+        status.trim(),
+        "?? tracked.txt",
+        "git status shows: {status}"
+    );
+}

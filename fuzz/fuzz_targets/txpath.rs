@@ -13,5 +13,5 @@ fuzz_target!(|data: &[u8]| {
     let _ = tx.write(p, b"x");
     let _ = tx.create_dir_all(p);
     let _ = tx.commit();
-    assert!(fs.private_tree().is_empty());
+    assert!(fs.private_leftovers().is_empty());
 });

@@ -210,7 +210,7 @@ proptest! {
                 }
             }
         }
-        prop_assert!(fs.private_tree().is_empty());
+        prop_assert!(fs.private_leftovers().is_empty());
         prop_assert!(fs.violations().is_empty());
     }
 }

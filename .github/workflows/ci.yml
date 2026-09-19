@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --all-features
+      - run: cargo build -p fstx -p fstx-cli --all-features
   nightly-deep:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest

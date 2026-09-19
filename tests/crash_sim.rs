@@ -191,9 +191,9 @@ fn check_final(ctx: &Ctx, fs: &SimFs, committed_ok: bool, trail: &str) {
         );
     }
     assert!(
-        fs.private_tree().is_empty(),
+        fs.private_leftovers().is_empty(),
         "{trail}: leftovers {:?}",
-        fs.private_tree().keys()
+        fs.private_leftovers()
     );
     assert!(fs.violations().is_empty(), "{trail}: {:?}", fs.violations());
 }

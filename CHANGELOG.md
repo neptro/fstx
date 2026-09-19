@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- `.fstx/` now contains a `.gitignore` (`*`), so it no longer shows up in `git status`.
+  Roots created by earlier versions get one on the next `Transaction::begin`.
+
 ## 0.1.1
 
 - Added `Transaction::write_with_mode` to set a file's permission bits exactly (for

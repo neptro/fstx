@@ -101,6 +101,22 @@ cargo run --example basic -- /tmp/demo              # apply some changes atomica
 cargo run --example crash_demo --features sim       # watch a crash get rolled back
 ```
 
+## Use from Node.js
+
+```sh
+npm install @neptro/fstx
+```
+
+```js
+const { transaction } = require('@neptro/fstx')
+transaction('./my-project', (tx) => {
+  tx.write('config.json', '{"version":2}')
+  tx.rename('old.js', 'src/new.js')
+}) // all changes, or none
+```
+
+TypeScript types are included; see [bindings/node](bindings/node/README.md).
+
 ## Command-line tool
 
 The companion crate [`fstx-cli`](cli/) provides an `fstx` command that applies a JSON

@@ -3,6 +3,7 @@ on:
   push:
   pull_request:
   schedule: [{ cron: "0 3 * * *" }]
+  workflow_dispatch:
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -29,7 +30,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build -p fstx -p fstx-cli --all-features
   nightly-deep:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -38,4 +39,11 @@ jobs:
       - run: cargo test --release --all-features -- --ignored
       - run: cargo install cargo-fuzz
       - run: cd fuzz && for t in journal progress txpath; do cargo +nightly fuzz run $t -- -max_total_time=120; done
-      - run: sudo apt-get install -y xfsprogs btrfs-progs && sudo ci/crash-real/run.sh
+      - name: Install dm-log-writes tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xfsprogs btrfs-progs "linux-modules-extra-$(uname -r)" || sudo apt-get install -y xfsprogs btrfs-progs
+          git clone --depth 1 https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git /tmp/xfstests
+          sudo gcc -O2 -o /usr/local/bin/replay-log /tmp/xfstests/src/log-writes/log-writes.c /tmp/xfstests/src/log-writes/replay-log.c
+      - name: Real-filesystem crash replay (ext4, xfs, btrfs)
+        run: sudo env "PATH=$PATH" ci/crash-real/run.sh

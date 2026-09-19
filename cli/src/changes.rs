@@ -296,6 +296,18 @@ pub fn stage(tx: &mut Transaction, cs: &ChangeSet, base: &Path) -> Result<Vec<Do
     Ok(done)
 }
 
+/// Permission bits of a source file (Unix only).
+#[cfg(unix)]
+fn file_mode(meta: &std::fs::Metadata) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
+    Some(meta.permissions().mode())
+}
+
+#[cfg(not(unix))]
+fn file_mode(_meta: &std::fs::Metadata) -> Option<u32> {
+    None
+}
+
 /// Stages a copy of every file and directory under `src` (dotfiles-style sync).
 /// Symlinks in `src` are skipped and reported; names in `exclude` are skipped at any depth.
 pub fn stage_sync(
@@ -303,7 +315,6 @@ pub fn stage_sync(
     src: &Path,
     exclude: &[String],
 ) -> Result<(Vec<Done>, Vec<String>), Failure> {
-    use std::os::unix::fs::PermissionsExt;
     let mut done = Vec::new();
     let mut skipped = Vec::new();
     let mut stack = vec![PathBuf::new()];
@@ -337,8 +348,11 @@ pub fn stage_sync(
             } else if meta.is_file() {
                 let data = std::fs::read(entry.path())
                     .map_err(|e| Failure::new(FailKind::Io, None, format!("{shown}: {e}")))?;
-                tx.write_with_mode(&child, data, meta.permissions().mode())
-                    .map_err(fx)?;
+                match file_mode(&meta) {
+                    Some(mode) => tx.write_with_mode(&child, data, mode),
+                    None => tx.write(&child, data),
+                }
+                .map_err(fx)?;
                 done.push(Done {
                     op: "write",
                     path: shown,

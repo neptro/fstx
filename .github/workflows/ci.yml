@@ -46,4 +46,6 @@ jobs:
           git clone --depth 1 https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git /tmp/xfstests
           sudo gcc -O2 -o /usr/local/bin/replay-log /tmp/xfstests/src/log-writes/log-writes.c /tmp/xfstests/src/log-writes/replay-log.c
       - name: Real-filesystem crash replay (ext4, xfs, btrfs)
-        run: sudo env "PATH=$PATH" ci/crash-real/run.sh
+        run: |
+          cargo build --release --example crash_workload
+          sudo env "WORKLOAD=$PWD/target/release/examples/crash_workload" ci/crash-real/run.sh

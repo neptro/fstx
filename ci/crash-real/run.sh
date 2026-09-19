@@ -28,8 +28,12 @@ trap cleanup EXIT
 command -v replay-log >/dev/null || { echo "replay-log (xfstests) not found" >&2; exit 2; }
 modprobe dm-log-writes
 
-cargo build --manifest-path "$repo/Cargo.toml" --release --example crash_workload
-workload="$repo/target/release/examples/crash_workload"
+# Under sudo, rustup/cargo may be unavailable: pass a prebuilt binary via WORKLOAD.
+if [ -z "${WORKLOAD:-}" ]; then
+  cargo build --manifest-path "$repo/Cargo.toml" --release --example crash_workload
+  WORKLOAD="$repo/target/release/examples/crash_workload"
+fi
+workload="$WORKLOAD"
 
 for fs in ext4 xfs btrfs; do
   echo "== $fs =="
